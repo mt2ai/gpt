@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+ENV/
+
+# Sistema y logs
+*.log
+.DS_Store
+Thumbs.db
+
+# Temporales de pruebas
+test_*.py
+check_raw.py
+parse_materials.py
+example_rag.py
+core_scanner.py
+inspect_taxonomy.py
