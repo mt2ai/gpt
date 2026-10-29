@@ -1,54 +1,126 @@
 import re
 from .wiki_client import get_image_url
 
+# Diccionario común de traducciones para materiales, stats y términos de la wiki
+VOCAB_ES = {
+    "Yetifell+": "Piel de Yeti+",
+    "Yetifell": "Piel de Yeti",
+    "Bärenfußhaut": "Piel de Pata de Oso",
+    "Bärenfußhaut+": "Piel de Pata de Oso+",
+    "Weißes Haarband+": "Cinta Blanca para el Cabello+",
+    "Weißes Haarband": "Cinta Blanca para el Cabello",
+    "Zerbrochenes Porzellan": "Porcelana Rota",
+    "Kriegersymbol": "Símbolo del Guerrero",
+    "Dämonenandenken": "Recuerdo del Demonio",
+    "Dämonenandenken+": "Recuerdo del Demonio+",
+    "Dämonenedelstein": "Gema del Demonio",
+    "Dämonenedelstein+": "Gema del Demonio+",
+    "Unbekannter Talisman": "Talismán Desconocido",
+    "Unbekannter Talisman+": "Talismán Desconocido+",
+    "Weiße Perle": "Perla Blanca",
+    "Blaue Perle": "Perla Azul",
+    "Blutrote Perle": "Perla Roja",
+    "Orkzahn": "Diente de Orco",
+    "Orkzahn+": "Diente de Orco+",
+    "Ork-Wurrzahn": "Diente de Orco con Raíz",
+    "Schlangenhaut": "Piel de Serpiente",
+    "Spinnensack": "Bolsa de Huevos de Araña",
+    "Spinnen-Augen": "Ojos de Araña",
+    "Spinnenbeine": "Patas de Araña",
+    "Skorpionschwanz": "Cola de Escorpión",
+    "Skorpionschwanz+": "Cola de Escorpión+",
+    "Skorpionnadel": "Aguijón de Escorpión",
+    "Fischgräte": "Espina de Pescado",
+    "Muschel": "Almeja",
+    "Stück Edelstein": "Trozo de Gema",
+    "Stück kaputter Rüstung": "Trozo de Armadura Rota",
+    "Rostige Klinge": "Espada Oxidada",
+    "Shiriken": "Shuriken",
+    "Shiriken+": "Shuriken+",
+    "Eisstück": "Trozo de Hielo",
+    "Eisstück+": "Trozo de Hielo+",
+    "Eiskugel": "Bola de Hielo",
+    "Eiskugel+": "Bola de Hielo+",
+    "Flammenmähne": "Melena Llameante",
+    "Krieger": "Guerrero",
+    "Sura": "Sura",
+    "Ninja": "Ninja",
+    "Schamane": "Chamán",
+    "Lykaner": "Licano",
+    "Einhänder": "Espada de 1 Mano",
+    "Zweihänder": "Espada de 2 Manos",
+    "Dolch": "Dagas",
+    "Bogen": "Arco",
+    "Glocke": "Campana",
+    "Fächer": "Abanico",
+    "Klauen": "Garras",
+    "Truhen": "Cofres",
+    "Monster": "Monstruos",
+    "Sonstiges": "Otros",
+    "Waffenhändler": "Vendedor de Armas",
+    "Rüstungshändler": "Vendedor de Armaduras",
+    "Metins": "Metins",
+    "Metinsteine": "Metins",
+    "Angriffswert": "Valor de Ataque",
+    "Magischer Angriffswert": "Ataque Mágico",
+    "Verteidigung": "Defensa"
+}
+
+def translate_term(term):
+    if not term:
+        return ""
+    t_clean = term.strip()
+    return VOCAB_ES.get(t_clean, t_clean)
+
 def clean_wiki_markup(text):
-    """Limpia enlaces y marcas básicas de wikitext"""
     if not text:
         return ""
-    # [[Enlace|Texto]] -> Texto, [[Enlace]] -> Enlace
     text = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", text)
-    # Quitar negritas y cursivas
     text = re.sub(r"'{2,5}", "", text)
-    # Quitar saltos excesivos
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    # Traducir palabras clave comunes en texto libre
+    for de_w, es_w in VOCAB_ES.items():
+        text = re.sub(rf"\b{re.escape(de_w)}\b", es_w, text)
+    return re.sub(r"\s+", " ", text).strip()
 
 def parse_icons_with_urls(raw_text):
     """
     Detecta {{icon|Nombre}} o {{icon2|Nombre|Texto}} o 1x {{icon|...}}
-    y asocia la URL del icono oficial
+    y asocia la URL del icono oficial y la traducción en español.
     """
     items = []
-    # Buscar patrones como "2x {{icon|Bärenfußhaut}}" o "{{icon2|Orkzahn|10x}}"
+    
     # 1. {{icon|Item}}
     pattern1 = re.findall(r"(?:(\d+)x\s*)?\{\{icon\|([^}]+)\}\}", raw_text)
     for cant, item_name in pattern1:
         cant_str = f"{cant}x " if cant else ""
-        img_url = get_image_url(item_name)
+        item_clean = item_name.strip()
+        img_url = get_image_url(item_clean)
+        es_name = translate_term(item_clean)
         items.append({
-            "name": item_name,
-            "display": f"{cant_str}{item_name}",
+            "name": item_clean,
+            "name_es": es_name,
+            "display": f"{cant_str}{es_name}",
             "icon_url": img_url
         })
         
     # 2. {{icon2|Item|Etiqueta}}
     pattern2 = re.findall(r"(?:(\d+)x\s*)?\{\{icon2\|([^}|]+)(?:\|([^}]+))?\}\}", raw_text)
     for cant, item_name, label in pattern2:
-        disp_name = label if label else item_name
+        item_clean = item_name.strip()
+        disp_name = label.strip() if label else item_clean
         cant_str = f"{cant}x " if cant else ""
-        img_url = get_image_url(item_name)
+        img_url = get_image_url(item_clean)
+        es_name = translate_term(disp_name)
         items.append({
-            "name": item_name,
-            "display": f"{cant_str}{disp_name}",
+            "name": item_clean,
+            "name_es": es_name,
+            "display": f"{cant_str}{es_name}",
             "icon_url": img_url
         })
         
     return items
 
 def parse_equipment_layout(wikitext, target_plus=None):
-    """
-    Parsea plantillas Waffe/Layout y Rüstung/Layout
-    """
     data = {}
     
     # Datos básicos
@@ -60,15 +132,30 @@ def parse_equipment_layout(wikitext, target_plus=None):
     data["level"] = clean_wiki_markup(level_match.group(1)) if level_match else None
     data["classes"] = clean_wiki_markup(classes_match.group(1)) if classes_match else None
     data["type"] = clean_wiki_markup(type_match.group(1)) if type_match else None
-    data["main_image"] = get_image_url(image_match.group(1).strip()) if image_match else None
     
-    # Costes y Materiales de mejora (Upgrade)
+    if image_match:
+        img_file = image_match.group(1).strip()
+        data["main_image"] = get_image_url(img_file)
+    else:
+        data["main_image"] = None
+    
+    # Costes
     kosten = dict(re.findall(r"\|Kosten(\d+)\s*=\s*([^|\n\r]+)", wikitext))
     
+    # Extraer todas las líneas |Upgradeitem-X-Y = valor completo
+    upgrade_items_map = {}
+    for line in wikitext.split("\n"):
+        match_up = re.match(r"^\|Upgradeitem-\d+-(\d+)\s*=\s*(.+)$", line.strip())
+        if match_up:
+            lvl_num = int(match_up.group(1))
+            val_text = match_up.group(2)
+            if lvl_num not in upgrade_items_map:
+                upgrade_items_map[lvl_num] = []
+            upgrade_items_map[lvl_num].append(val_text)
+
     upgrades = []
     for i in range(1, 10):
         lvl_key = str(i)
-        target_lvl_str = f"+{i}"
         
         # Filtrar si el usuario pidió un nivel específico (ej: +9)
         if target_plus is not None and target_plus != i:
@@ -76,10 +163,10 @@ def parse_equipment_layout(wikitext, target_plus=None):
             
         cost = kosten.get(lvl_key, "0").strip()
         
-        # Buscar items de mejora: Upgradeitem-1-X, Upgradeitem-2-X
-        mats_raw = re.findall(rf"\|Upgradeitem-\d+-{lvl_key}\s*=\s*([^\n\r|]+)", wikitext)
+        # Parsear materiales de este nivel
+        raw_mats_lines = upgrade_items_map.get(i, [])
         materials_parsed = []
-        for mr in mats_raw:
+        for mr in raw_mats_lines:
             materials_parsed.extend(parse_icons_with_urls(mr))
             
         # Valores de Ataque / Defensa
@@ -114,9 +201,6 @@ def parse_equipment_layout(wikitext, target_plus=None):
     return data
 
 def parse_quest_layout(wikitext):
-    """
-    Parsea la plantilla Quest/Layout
-    """
     level = re.search(r"\|Level\s*=\s*([^|\n\r]+)", wikitext)
     questgeber = re.search(r"\|Questgeber\s*=\s*([^|\n\r]+)", wikitext)
     items_raw = re.search(r"\|Items\s*=\s*(.*?)(?=\n\|[A-Za-z0-9_-]+\s*=)", wikitext, re.DOTALL)
@@ -136,9 +220,6 @@ def parse_quest_layout(wikitext):
     }
 
 def parse_monster_layout(wikitext):
-    """
-    Parsea la plantilla Monster/Layout y Metin/Layout
-    """
     level = re.search(r"\|Level\s*=\s*([^|\n\r]+)", wikitext)
     rang = re.search(r"\|Rang\s*=\s*([^|\n\r]+)", wikitext)
     element = re.search(r"\|Element\s*=\s*([^|\n\r]+)", wikitext)
