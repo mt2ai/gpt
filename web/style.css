@@ -131,7 +131,68 @@ body {
   font-family: 'Courier New', monospace;
 }
 
+.msg-bubble h1, .msg-bubble h2, .msg-bubble h3 {
+  margin: 14px 0 6px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+}
+.msg-bubble h2 { font-size: 0.98rem; }
+.msg-bubble h3 { font-size: 0.90rem; }
+
+.msg-bubble hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+.msg-bubble blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+/* Tablas generadas por Markdown */
+.msg-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.msg-bubble th {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-weight: 600;
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.msg-bubble td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.msg-bubble tr:last-child td {
+  border-bottom: none;
+}
+
+.ai-comment {
+  margin-bottom: 14px;
+}
+
 /* ── Item card (wiki) ── */
+
 .item-card { width: 100%; }
 
 .item-header {

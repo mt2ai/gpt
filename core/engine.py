@@ -8,6 +8,7 @@ import urllib.parse
 
 from .wiki_client import get_page_content
 from .parser_layouts import parse_equipment_layout, parse_quest_layout, parse_monster_layout
+from .llm import GroqLLM
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "data")
@@ -15,7 +16,7 @@ DATA_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "data")
 CATALOG_FILE = os.path.join(DATA_DIR, "catalog_index.json")
 SLANG_FILE = os.path.join(DATA_DIR, "slang_dictionary.json")
 
-# ── Respuestas conversacionales ─────────────────────────────────────────────
+# ── Respuestas conversacionales de respaldo (si no hay LLM activo) ───────────
 
 CONVERSATIONAL_INTENTS = [
     {
@@ -24,8 +25,8 @@ CONVERSATIONAL_INTENTS = [
             r"\b(hola|buenas|hey|ey|eyyy|saludos|buenos dias|buenas tardes|buenas noches|hi|hello|que tal|que onda|que hubo|ke tal|ktal)\b"
         ],
         "responses": [
-            "¡Hola! 👋 Soy el **Metin2 Oracle**, tu asistente oficial de Metin2.\n\nPuedo ayudarte con:\n- 🗡️ Materiales de mejora de armas y armaduras\n- 📜 Guías de misiones (Biólogo, Pescador, etc.)\n- 🌙 Información de drops de monstruos y jefes\n- 💎 Cualquier cosa del juego que quieras consultar\n\n¿Qué necesitas saber?",
-            "¡Buenas! 🔥 Estoy listo para ayudarte con todo lo de Metin2.\n\nSolo escribe lo que necesitas, puedes escribirlo con faltas o en argot gamer (ej: *\"q pide pa nueve la enve\"*, *\"donde dropea el vms\"*).\n\n¿En qué te ayudo?",
+            "¡Hola! 👋 Soy el **Metin2 Oracle**, tu asistente oficial de Metin2.\n\nPuedo ayudarte con:\n- 🗡️ Materiales de mejora de armas y armaduras\n- 📜 Guías de misiones (Biólogo, Pescador, etc.)\n- 🌙 Información de drops de monstruos y jefes\n- 💎 Cualquier duda o guía del juego que quieras consultar\n\n¿Qué necesitas saber?",
+            "¡Buenas! 🔥 Estoy listo para ayudarte con todo lo de Metin2.\n\nSolo escribe lo que necesitas, puedes escribirlo con faltas o en argot gamer (ej: *\"q pide pa nueve la enve\"*, *\"donde dropea el vms\"*, *\"cuantas misiones del biologo hay\"*).\n\n¿En qué te ayudo?",
         ]
     },
     {
@@ -55,45 +56,12 @@ CONVERSATIONAL_INTENTS = [
             r"\b(quien eres|que eres|como te llamas|que puedes hacer|para que sirves|que sabes|en que me ayudas|cuales son tus capacidades)\b"
         ],
         "responses": [
-            "Soy el **Metin2 Oracle** 🔮, un asistente especializado en Metin2.\n\nExtrae información **directamente de la wiki oficial alemana** (la más completa y actualizada) en tiempo real.\n\n**Puedo responder sobre:**\n- 🗡️ Mejoras de armas y armaduras (+0 a +9)\n- 📜 Misiones: Biólogo, Pescador, Guerrero, etc.\n- 👹 Drops de monstruos, jefes y metins\n- 💰 Costos en Yang y materiales necesarios\n- 🎨 Iconos reales del juego\n\nEscribe tu consulta con jerga o faltas, te entiendo igual 😄",
-        ]
-    },
-    {
-        "name": "how_are_you",
-        "patterns": [
-            r"\b(como estas|como andas|todo bien|como te va|bien y tu|que hay|que cuentas)\b"
-        ],
-        "responses": [
-            "¡Todo bien por aquí, listo para consultas! 💪 ¿Qué necesitas saber de Metin2?",
-            "¡Perfecto y tú! 😄 Cuéntame qué necesitas del juego.",
-        ]
-    },
-    {
-        "name": "insult_or_test",
-        "patterns": [
-            r"\b(tonto|estupido|idiota|malo|inutil|no sirves|eres una mierda|test|prueba|hola mundo)\b"
-        ],
-        "responses": [
-            "Soy un oráculo, no me ofendo tan fácil 😄 ¿Necesitas algo de Metin2?",
-            "Jaja, me das duro 😅 Pero bueno, ¿en qué te ayudo con Metin2?",
-        ]
-    },
-    {
-        "name": "joke",
-        "patterns": [
-            r"\b(cuéntame un chiste|dime un chiste|chiste|bromea|algo divertido)\b"
-        ],
-        "responses": [
-            "¿Por qué el guerrero de Metin2 nunca llega tarde? ⚔️\n\nPorque siempre va al **servidor correcto**. 😄\n\n¿Pregunta algo del juego y te respondo en serio!",
+            "Soy el **Metin2 Oracle** 🔮, tu oráculo inteligente para Metin2 con tecnología IA y datos oficiales de la wiki.\n\n**Puedo responder sobre:**\n- 🗡️ Mejoras de armas y armaduras (+0 a +9)\n- 📜 Misiones: Biólogo, Pescador, Caballo, etc.\n- 👹 Drops de monstruos, jefes y metins\n- 💰 Costos en Yang y materiales necesarios\n- 💡 Guías de leveo, doctrinas, alquimia y atributos\n\nPregúntame lo que quieras con cualquier jerga gamer 😄",
         ]
     },
 ]
 
 def detect_conversational_intent(norm_query):
-    """
-    Detecta si la consulta es conversacional (saludo, despedida, etc.)
-    Retorna (intent_name, response) o (None, None).
-    """
     for intent in CONVERSATIONAL_INTENTS:
         for pattern in intent["patterns"]:
             if re.search(pattern, norm_query):
@@ -132,40 +100,47 @@ class Metin2Engine:
         for slang_word, target_de in self.slang.items():
             self.search_index[normalize_string(slang_word)] = target_de
 
+        # Inicializar cliente LLM de Groq
+        self.llm = GroqLLM()
+
         # Memoria de conversación por sesión
-        # session_id -> { "last_entity": "Giftschwert", "last_query": "..." }
+        # session_id -> { "messages": [...], "last_entity": "Giftschwert" }
         self.sessions = {}
 
     def translate_raw_names(self, text):
-        """
-        Traduce nombres de monstruos, cofres y metins en textos libres de drop
-        """
         if not text:
             return ""
-        # Reemplazar términos comunes de estructura
         text = text.replace("Monster:", "Monstruos:").replace("Truhen:", "Cofres:").replace("Sonstiges:", "Otros:")
-        # Ordenar traducciones por longitud descendente para evitar colisiones de subcadenas
         sorted_pairs = sorted(self.de_to_es.items(), key=lambda x: len(x[0]), reverse=True)
         for de_name, es_name in sorted_pairs:
             if len(de_name) > 3 and de_name in text:
                 text = text.replace(de_name, es_name)
         return text
 
+    def _record_session_message(self, session_id, role, content):
+        if session_id not in self.sessions:
+            self.sessions[session_id] = {"messages": [], "last_entity": None}
+        messages = self.sessions[session_id]["messages"]
+        messages.append({"role": role, "content": content})
+        # Mantener solo las últimas 12 entradas
+        if len(messages) > 12:
+            self.sessions[session_id]["messages"] = messages[-12:]
+
     def resolve_query(self, user_query, session_id="default"):
         norm_query = normalize_string(user_query)
         words = norm_query.split()
 
-        # 0. Detectar intención conversacional (saludos, despedidas, etc.)
-        intent_name, conv_response = detect_conversational_intent(norm_query)
-        if intent_name:
-            return {
-                "success": True,
-                "type": "conversational",
-                "intent": intent_name,
-                "message": conv_response
-            }
+        if session_id not in self.sessions:
+            self.sessions[session_id] = {"messages": [], "last_entity": None}
+        session = self.sessions[session_id]
 
-        # 1. Detectar si especificó un nivel (+0 a +9 o palabras)
+        # Detectar si es una pregunta conceptual, de conteo, lista, guía o explicación
+        is_overview_or_question = bool(re.search(
+            r"\b(cuant[ao]s?|list[ao]|tod[ao]s|cuales|que son|como funciona|donde levear|leveo|guia|consejos?|que dopes|que bonus|alquimia|caballo|estatus|stats|razas?|build|compara|diferencia|por que|porque|explic|sirve|hace)\b",
+            norm_query
+        ))
+
+        # Detectar nivel (+0 a +9)
         target_plus = None
         match_plus = re.search(r"\+(\d)", norm_query)
         if match_plus:
@@ -180,14 +155,47 @@ class Metin2Engine:
                     target_plus = n
                     break
 
-        # 2. Identificar la entidad oficial
+        # ── CASO A: Pregunta abierta / de lista / conteo / guía con LLM activo ──
+        if is_overview_or_question and self.llm.is_available():
+            history = session.get("messages", [])
+            llm_reply = self.llm.generate_response(user_query, history=history)
+            if llm_reply:
+                self._record_session_message(session_id, "user", user_query)
+                self._record_session_message(session_id, "assistant", llm_reply)
+                return {
+                    "success": True,
+                    "type": "conversational",
+                    "message": llm_reply
+                }
+
+        # ── CASO B: Saludos y cortesía si no hay LLM o si es un saludo simple ──
+        intent_name, conv_response = detect_conversational_intent(norm_query)
+        if intent_name and len(words) <= 3:
+            if self.llm.is_available():
+                history = session.get("messages", [])
+                llm_reply = self.llm.generate_response(user_query, history=history)
+                if llm_reply:
+                    self._record_session_message(session_id, "user", user_query)
+                    self._record_session_message(session_id, "assistant", llm_reply)
+                    return {
+                        "success": True,
+                        "type": "conversational",
+                        "message": llm_reply
+                    }
+            return {
+                "success": True,
+                "type": "conversational",
+                "intent": intent_name,
+                "message": conv_response
+            }
+
+        # ── CASO C: Identificar entidad oficial en el catálogo ──
         matched_de_title = None
         
         # Búsqueda directa por frase o jerga
         if norm_query in self.search_index:
             matched_de_title = self.search_index[norm_query]
         else:
-            # Revisar jerga ordenada por longitud (las frases más largas primero)
             sorted_slang = sorted(self.slang.items(), key=lambda x: len(x[0]), reverse=True)
             for slang_term, de_title in sorted_slang:
                 if slang_term in norm_query:
@@ -198,91 +206,140 @@ class Metin2Engine:
         if not matched_de_title:
             stopwords = {
                 "q", "que", "pide", "pa", "para", "la", "el", "los", "las", "subir", "a", "de", "en", 
-                "como", "donde", "mision", "dropea", "cae", "suelta", "quien", "consigo", "da", "consigue",
-                "necesito", "una", "un", "los", "las", "y", "o", "cuanto", "yang", "materiales", "dame"
+                "como", "donde", "mision", "misiones", "dropea", "cae", "suelta", "quien", "consigo", "da", "consigue",
+                "necesito", "una", "un", "los", "las", "y", "o", "cuanto", "cuantos", "cuantas", "yang", "materiales", "dame"
             }
             meaningful_words = [w for w in words if w not in stopwords and not w.isdigit()]
             query_core = " ".join(meaningful_words)
             
-            if query_core:
+            if query_core and not is_overview_or_question:
                 keys = list(self.search_index.keys())
-                matches = difflib.get_close_matches(query_core, keys, n=1, cutoff=0.5)
+                matches = difflib.get_close_matches(query_core, keys, n=1, cutoff=0.55)
                 if matches:
                     matched_de_title = self.search_index[matches[0]]
                 else:
                     for mw in meaningful_words:
-                        sub_m = difflib.get_close_matches(mw, keys, n=1, cutoff=0.65)
-                        if sub_m:
-                            matched_de_title = self.search_index[sub_m[0]]
-                            break
+                        if len(mw) >= 4:
+                            sub_m = difflib.get_close_matches(mw, keys, n=1, cutoff=0.7)
+                            if sub_m:
+                                matched_de_title = self.search_index[sub_m[0]]
+                                break
 
-        # 3. MEMORIA DE CONVERSACIÓN: Si no detectó una entidad nueva, recurrir a la última entidad activa
-        session = self.sessions.get(session_id, {})
-        if not matched_de_title:
-            if "last_entity" in session:
+        # Memoria de conversación: usar última entidad si la consulta es un pronombre o contexto ("y a +9?", "donde cae?")
+        if not matched_de_title and session.get("last_entity"):
+            if any(w in words for w in ["donde", "cae", "dropea", "subir", "pide", "mats", "yang", "coste", "nivel"]) or target_plus is not None:
                 matched_de_title = session["last_entity"]
-                print(f"[Memory] Usando contexto previo para sesión '{session_id}': {matched_de_title}")
 
+        # Si aún no se encontró entidad pero hay LLM disponible: responder de forma conversacional con el LLM
+        if not matched_de_title and self.llm.is_available():
+            history = session.get("messages", [])
+            llm_reply = self.llm.generate_response(user_query, history=history)
+            if llm_reply:
+                self._record_session_message(session_id, "user", user_query)
+                self._record_session_message(session_id, "assistant", llm_reply)
+                return {
+                    "success": True,
+                    "type": "conversational",
+                    "message": llm_reply
+                }
+
+        # Si no hay entidad ni LLM
         if not matched_de_title:
             return {
                 "success": False,
                 "message": (
-                    f"🤔 No encontré nada relacionado con **\"{user_query}\"** en la wiki oficial.\n\n"
-                    "Intenta ser más específico, por ejemplo:\n"
-                    "- *\"materiales espada bambu +9\"*\n"
-                    "- *\"donde dropea el vms\"*\n"
-                    "- *\"mision biologo 30 dientes\"*"
+                    f"🤔 No encontré información específica sobre **\"{user_query}\"**.\n\n"
+                    "Puedes preguntar cosas como:\n"
+                    "- *\"cuántas misiones del biólogo hay\"*\n"
+                    "- *\"qué pide para nueve la enve\"*\n"
+                    "- *\"dónde cae el vms\"*\n"
+                    "- *\"cómo sacar caballo armado\"*"
                 )
             }
 
         # Guardar en memoria de sesión
-        self.sessions[session_id] = {
-            "last_entity": matched_de_title,
-            "last_query": user_query
-        }
+        session["last_entity"] = matched_de_title
 
-        # 4. Descargar wikitext y parsear
+        # Obtener datos oficiales de la wiki
         entity_info = self.catalog.get(matched_de_title, {})
         ent_type = entity_info.get("type", "unknown")
         title_es = entity_info.get("title_es") or self.de_to_es.get(matched_de_title, matched_de_title)
-        
-        wikitext = get_page_content(matched_de_title)
-        if not wikitext:
-            return {
-                "success": False,
-                "message": f"Se identificó '{title_es}', pero no fue posible cargar el artículo oficial en la wiki."
-            }
+        wiki_url = f"https://de-wiki.metin2.gameforge.com/index.php/{urllib.parse.quote(matched_de_title)}"
 
         parsed_data = {}
-        wiki_url = f"https://de-wiki.metin2.gameforge.com/index.php/{urllib.parse.quote(matched_de_title)}"
-        
-        if ent_type in ["weapon", "armor", "helmet", "shield", "earring", "bracelet", "necklace", "shoes", "belt", "talisman"]:
-            parsed_data = parse_equipment_layout(wikitext, target_plus=target_plus)
-            category_label = "Equipamiento"
+        category_label = "Objeto"
+        wikitext = ""
+
+        try:
+            wikitext = get_page_content(matched_de_title)
+        except Exception as e:
+            print(f"[Engine] Error al obtener wiki content: {e}")
+
+        if wikitext:
+            if ent_type in ["weapon", "armor", "helmet", "shield", "earring", "bracelet", "necklace", "shoes", "belt", "talisman"]:
+                parsed_data = parse_equipment_layout(wikitext, target_plus=target_plus)
+                category_label = "Equipamiento"
+                if parsed_data.get("drops_raw"):
+                    parsed_data["drops_raw"] = self.translate_raw_names(parsed_data["drops_raw"])
+            elif ent_type == "quest":
+                parsed_data = parse_quest_layout(wikitext)
+                category_label = "Misión"
+            elif ent_type in ["monster", "boss", "metin"]:
+                parsed_data = parse_monster_layout(wikitext)
+                category_label = "Monstruo / Jefe"
+                if parsed_data.get("drops_text"):
+                    parsed_data["drops_text"] = self.translate_raw_names(parsed_data["drops_text"])
+            else:
+                category_label = "Objeto"
+                parsed_data = {"description": wikitext[:600]}
+
+        # Si el LLM está activo, generar explicación natural enriquecida con los datos oficiales
+        ai_message = None
+        if self.llm.is_available():
+            wiki_summary = f"Entidad: {title_es} ({matched_de_title}) - Categoría: {category_label}\n"
+            if target_plus is not None:
+                wiki_summary += f"Nivel consultado: +{target_plus}\n"
+            if parsed_data.get("upgrades"):
+                wiki_summary += f"Tabla de mejoras disponible para {len(parsed_data['upgrades'])} niveles.\n"
             if parsed_data.get("drops_raw"):
-                parsed_data["drops_raw"] = self.translate_raw_names(parsed_data["drops_raw"])
-        elif ent_type == "quest":
-            parsed_data = parse_quest_layout(wikitext)
-            category_label = "Misión"
-        elif ent_type in ["monster", "boss", "metin"]:
-            parsed_data = parse_monster_layout(wikitext)
-            category_label = "Monstruo / Jefe"
-            if parsed_data.get("drops_text"):
-                parsed_data["drops_text"] = self.translate_raw_names(parsed_data["drops_text"])
-        else:
-            category_label = "Objeto"
-            parsed_data = {"description": wikitext[:600]}
+                wiki_summary += f"Drops / Obtención: {parsed_data['drops_raw']}\n"
+            if parsed_data.get("rewards_text"):
+                wiki_summary += f"Recompensas: {parsed_data['rewards_text']}\n"
+
+            history = session.get("messages", [])
+            ai_message = self.llm.generate_response(user_query, history=history, wiki_context=wiki_summary)
+            if ai_message:
+                self._record_session_message(session_id, "user", user_query)
+                self._record_session_message(session_id, "assistant", ai_message)
+
+        # Si tenemos tarjeta parseada
+        if parsed_data:
+            return {
+                "success": True,
+                "type": "wiki_card_with_ai" if ai_message else "wiki_card",
+                "message": ai_message or "",
+                "query_original": user_query,
+                "entity": {
+                    "title_de": matched_de_title,
+                    "title_es": title_es,
+                    "type": ent_type,
+                    "category_label": category_label,
+                    "wiki_url": wiki_url
+                },
+                "target_plus": target_plus,
+                "data": parsed_data
+            }
+
+        # Si falló la wiki pero tenemos IA
+        if ai_message:
+            return {
+                "success": True,
+                "type": "conversational",
+                "message": ai_message
+            }
 
         return {
-            "success": True,
-            "query_original": user_query,
-            "entity": {
-                "title_de": matched_de_title,
-                "title_es": title_es,
-                "type": ent_type,
-                "category_label": category_label,
-                "wiki_url": wiki_url
-            },
-            "target_plus": target_plus,
-            "data": parsed_data
+            "success": False,
+            "message": f"Se identificó '{title_es}', pero la wiki oficial no se encuentra disponible temporalmente."
         }
+

@@ -171,8 +171,13 @@ async function handleSend() {
       botHtml = typeof marked !== "undefined"
         ? marked.parse(data.message)
         : `<p>${data.message}</p>`;
+    } else if (data.type === "wiki_card_with_ai") {
+      // Explicación inteligente con IA + ficha oficial de la wiki
+      const aiText = data.message ? (typeof marked !== "undefined" ? marked.parse(data.message) : `<p>${data.message}</p>`) : "";
+      const cardHtml = buildWikiCard(data);
+      botHtml = `<div class="ai-comment">${aiText}</div>` + cardHtml;
     } else {
-      // Respuesta wiki
+      // Respuesta wiki directa
       botHtml = buildWikiCard(data);
     }
 
