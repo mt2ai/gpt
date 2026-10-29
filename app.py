@@ -47,6 +47,7 @@ def ask(
     return JSONResponse(result)
 
 if __name__ == "__main__":
-    # Escucha en 0.0.0.0 para que puedas conectarte desde tu celular en la misma red Wi-Fi
-    print("Iniciando servidor en http://0.0.0.0:8000...")
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+    port = int(os.environ.get("PORT", 8000))
+    host = "0.0.0.0"
+    print(f"Iniciando servidor en http://{host}:{port}...")
+    uvicorn.run("app:app", host=host, port=port, reload=False)

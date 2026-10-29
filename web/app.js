@@ -1,167 +1,280 @@
-const chatContainer = document.getElementById("chatContainer");
-const userInput = document.getElementById("userInput");
-const sendBtn = document.getElementById("sendBtn");
+// ── Mobile: fix de altura del viewport ────────────
+// En móvil, el teclado virtual reduce el viewport pero 100dvh no siempre
+// se actualiza a tiempo. Usamos --vh como variable CSS actualizada por JS.
+function setVh() {
+  const vh = (window.visualViewport?.height ?? window.innerHeight) * 0.01;
+  document.documentElement.style.setProperty("--vh", `${vh}px`);
+}
+setVh();
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", () => {
+    setVh();
+    // Scroll al último mensaje cuando se abre/cierra el teclado
+    setTimeout(() => messagesEl?.scrollTo({ top: messagesEl.scrollHeight, behavior: "instant" }), 50);
+  });
+} else {
+  window.addEventListener("resize", setVh);
+}
 
-// Configuración de API Backend (si está en GitHub Pages, puede apuntar a un servidor remoto)
+// ── Elementos ─────────────────────────────────────
+const messagesEl = document.getElementById("messages");
+const userInput  = document.getElementById("userInput");
+const sendBtn    = document.getElementById("sendBtn");
+
+// ── Config ─────────────────────────────────────────
 const BACKEND_URL = localStorage.getItem("m2_backend_url") || "";
+const HISTORY_KEY = "m2_history";
+const SESSION_KEY = "m2_session_id";
 
-// ID de sesión único por dispositivo para la memoria de conversación
-let sessionId = localStorage.getItem("m2_session_id");
+// ── Sesión persistente ─────────────────────────────
+let sessionId = localStorage.getItem(SESSION_KEY);
 if (!sessionId) {
   sessionId = "sess-" + Math.random().toString(36).substring(2, 9);
-  localStorage.setItem("m2_session_id", sessionId);
+  localStorage.setItem(SESSION_KEY, sessionId);
 }
 
-function scrollToBottom() {
-  chatContainer.scrollTop = chatContainer.scrollHeight;
-}
+// ── Historial persistente ──────────────────────────
+// Formato: [{ role: "user"|"bot", text: "...", html: "..." }]
+let history = [];
 
-function quickAsk(text) {
-  userInput.value = text;
-  handleSend(new Event('submit'));
-}
-
-async function handleSend(e) {
-  if (e) e.preventDefault();
-  const text = userInput.value.trim();
-  if (!text) return;
-
-  // Render mensaje del usuario
-  appendMessage("user", text);
-  userInput.value = "";
-  userInput.focus();
-  sendBtn.disabled = true;
-
-  // Render placeholder de carga
-  const botMessageId = "msg-" + Date.now();
-  appendMessage("assistant", `<span class="loading-dots">Consultando wiki oficial...</span>`, botMessageId);
-
+function loadHistory() {
   try {
-    const apiUrl = `${BACKEND_URL}/api/ask?q=${encodeURIComponent(text)}&session_id=${encodeURIComponent(sessionId)}`;
-    const response = await fetch(apiUrl);
-    const result = await response.json();
-    
-    const botMsgElement = document.getElementById(botMessageId);
-    if (!result.success) {
-      botMsgElement.innerHTML = `<p>${result.message || "No se encontró información."}</p>`;
-    } else {
-      botMsgElement.innerHTML = renderOracleResponse(result);
-    }
-  } catch (error) {
-    const botMsgElement = document.getElementById(botMessageId);
-    botMsgElement.innerHTML = `<p style="color:#ef4444;">Error al conectar con el servidor: ${error.message}</p>`;
-  } finally {
-    sendBtn.disabled = false;
-    scrollToBottom();
-  }
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (raw) history = JSON.parse(raw);
+  } catch { history = []; }
 }
 
-function appendMessage(sender, htmlContent, id = null) {
-  const msgDiv = document.createElement("div");
-  msgDiv.className = `message ${sender}`;
-  if (id) msgDiv.id = id;
+function saveHistory() {
+  // Guardar solo los últimos 200 mensajes para no sobrepasar el límite
+  const trimmed = history.slice(-200);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed)); } catch {}
+}
+
+// ── Marked config ──────────────────────────────────
+if (typeof marked !== "undefined") {
+  marked.setOptions({ breaks: true, gfm: true });
+}
+
+// ── Scroll ─────────────────────────────────────────
+function scrollToBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// ── Renderizar un mensaje en pantalla ──────────────
+function renderMessage(role, htmlContent) {
+  const isUser = role === "user";
+  const div = document.createElement("div");
+  div.className = `msg ${isUser ? "user" : "bot"}`;
 
   const avatar = document.createElement("div");
-  avatar.className = "avatar";
-  avatar.innerText = sender === "user" ? "Tú" : "M2";
+  avatar.className = "msg-avatar";
+  avatar.textContent = isUser ? "Tú" : "M2";
 
   const bubble = document.createElement("div");
-  bubble.className = "bubble";
+  bubble.className = "msg-bubble";
   bubble.innerHTML = htmlContent;
 
-  msgDiv.appendChild(avatar);
-  msgDiv.appendChild(bubble);
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  messagesEl.appendChild(div);
+  return bubble;
+}
 
-  chatContainer.appendChild(msgDiv);
+// ── Cargar historial al iniciar ────────────────────
+function initHistory() {
+  loadHistory();
+  for (const entry of history) {
+    renderMessage(entry.role, entry.html);
+  }
   scrollToBottom();
 }
 
-function renderOracleResponse(res) {
-  const ent = res.entity;
-  const data = res.data;
+// ── Typing indicator ───────────────────────────────
+function showTyping() {
+  const div = document.createElement("div");
+  div.className = "msg bot";
+  div.id = "typing-indicator";
 
-  let html = `
-    <div class="item-card">
-      <div class="item-header">
-        ${data.main_image ? `<img src="${data.main_image}" class="item-img" alt="${ent.title_es}">` : ''}
-        <div class="item-title-group">
-          <h2>${ent.title_es}</h2>
-          <div class="item-subtitle">${ent.title_de} • ${ent.category_label} ${data.level ? `• Nivel ${data.level}` : ''}</div>
-        </div>
-      </div>
-  `;
+  const avatar = document.createElement("div");
+  avatar.className = "msg-avatar";
+  avatar.textContent = "M2";
 
-  // Renderizar tabla de mejora si es equipamiento
-  if (data.upgrades && data.upgrades.length > 0) {
-    html += `
-      <table class="upgrade-table">
-        <thead>
-          <tr>
-            <th>Nivel</th>
-            <th>Coste</th>
-            <th>Materiales</th>
-            <th>Stats</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+  bubble.innerHTML = `<div class="typing"><span></span><span></span><span></span></div>`;
 
-    for (const up of data.upgrades) {
-      let matsHtml = '<span style="color:#9ca3af;">Ninguno</span>';
-      if (up.materials && up.materials.length > 0) {
-        matsHtml = up.materials.map(m => `
-          <div class="mat-item">
-            ${m.icon_url ? `<img src="${m.icon_url}" alt="${m.name}">` : ''}
-            <span>${m.display}</span>
-          </div>
-        `).join("");
-      }
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  messagesEl.appendChild(div);
+  scrollToBottom();
+  return bubble;
+}
 
-      html += `
-        <tr>
-          <td><strong>${up.from_to}</strong></td>
-          <td class="yang-val">${up.yang}</td>
-          <td>${matsHtml}</td>
-          <td style="color:#a7f3d0; font-size:0.75rem;">${up.stats ? up.stats.join("<br>") : '-'}</td>
-        </tr>
-      `;
+function removeTyping() {
+  const el = document.getElementById("typing-indicator");
+  if (el) el.remove();
+}
+
+// ── Textarea auto-resize ───────────────────────────
+function autoResize() {
+  userInput.style.height = "auto";
+  userInput.style.height = Math.min(userInput.scrollHeight, 160) + "px";
+}
+userInput.addEventListener("input", autoResize);
+
+// ── Enter envía, Shift+Enter = nueva línea ─────────
+userInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    handleSend();
+  }
+});
+
+// ── Enviar mensaje ─────────────────────────────────
+let isLoading = false;
+
+async function handleSend() {
+  const text = userInput.value.trim();
+  if (!text || isLoading) return;
+
+  isLoading = true;
+  sendBtn.disabled = true;
+
+  // Mostrar mensaje del usuario
+  const userHtml = escapeHtml(text).replace(/\n/g, "<br>");
+  renderMessage("user", userHtml);
+  history.push({ role: "user", html: userHtml });
+  saveHistory();
+
+  userInput.value = "";
+  autoResize();
+
+  // Typing
+  const botBubble = showTyping();
+
+  try {
+    const url = `${BACKEND_URL}/api/ask?q=${encodeURIComponent(text)}&session_id=${encodeURIComponent(sessionId)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    removeTyping();
+
+    let botHtml;
+
+    if (!data.success) {
+      // Error amigable con markdown
+      botHtml = typeof marked !== "undefined"
+        ? marked.parse(data.message || "No se encontró información.")
+        : `<p>${data.message}</p>`;
+    } else if (data.type === "conversational") {
+      // Respuesta conversacional — markdown
+      botHtml = typeof marked !== "undefined"
+        ? marked.parse(data.message)
+        : `<p>${data.message}</p>`;
+    } else {
+      // Respuesta wiki
+      botHtml = buildWikiCard(data);
     }
 
-    html += `</tbody></table>`;
+    const bubble = renderMessage("bot", botHtml);
+    bubble.style.opacity = "0";
+    requestAnimationFrame(() => {
+      bubble.style.transition = "opacity 0.25s";
+      bubble.style.opacity = "1";
+    });
+
+    history.push({ role: "bot", html: botHtml });
+    saveHistory();
+    scrollToBottom();
+
+  } catch (err) {
+    removeTyping();
+    const errHtml = `<p style="color:#ef4444;">Error de conexión: ${err.message}</p>`;
+    renderMessage("bot", errHtml);
+    history.push({ role: "bot", html: errHtml });
+    saveHistory();
+    scrollToBottom();
+  } finally {
+    isLoading = false;
+    sendBtn.disabled = false;
+    userInput.focus();
   }
-
-  // Renderizar misiones
-  if (ent.type === "quest") {
-    html += `
-      <div style="font-size:0.85rem; margin-top:8px;">
-        <p><strong>PNJ:</strong> ${data.quest_giver}</p>
-        <p><strong>Nivel requerido:</strong> ${data.level}</p>
-        ${data.items && data.items.length > 0 ? `
-          <div style="margin-top:6px;"><strong>Items requeridos:</strong>
-            ${data.items.map(i => `<div class="mat-item">${i.icon_url ? `<img src="${i.icon_url}">` : ''} ${i.display}</div>`).join("")}
-          </div>` : ''}
-        ${data.rewards_text ? `<p style="margin-top:6px;"><strong>Recompensa:</strong> ${data.rewards_text}</p>` : ''}
-        ${data.solution ? `<p style="margin-top:6px; color:#cbd5e1;"><em>${data.solution}</em></p>` : ''}
-      </div>
-    `;
-  }
-
-  // Renderizar drops
-  if (data.drops_raw) {
-    html += `
-      <div style="margin-top:10px; font-size:0.82rem; color:#cbd5e1;">
-        <strong>Drop / Obtención:</strong> ${data.drops_raw}
-      </div>
-    `;
-  }
-
-  // Enlace a la fuente oficial
-  html += `
-      <a href="${ent.wiki_url}" target="_blank" rel="noopener noreferrer" class="wiki-link">
-        🔗 Ver artículo completo en de-wiki.metin2.gameforge.com ↗
-      </a>
-    </div>
-  `;
-
-  return html;
 }
+
+sendBtn.addEventListener("click", handleSend);
+
+// ── Escape HTML ────────────────────────────────────
+function escapeHtml(t) {
+  return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Construir card de wiki ─────────────────────────
+function buildWikiCard(res) {
+  const ent  = res.entity;
+  const data = res.data;
+
+  let h = `<div class="item-card">`;
+
+  // Header
+  h += `<div class="item-header">`;
+  if (data.main_image) h += `<img src="${data.main_image}" class="item-img" alt="${ent.title_es}" loading="lazy">`;
+  h += `<div class="item-title">
+    <h2>${ent.title_es}</h2>
+    <div class="item-subtitle">${ent.title_de} · ${ent.category_label}${data.level ? ` · Nv ${data.level}` : ""}</div>
+  </div></div>`;
+
+  // Tabla mejoras
+  if (data.upgrades && data.upgrades.length > 0) {
+    h += `<div class="table-scroll"><table class="upgrade-table">
+      <thead><tr><th>Nivel</th><th>Coste</th><th>Materiales</th><th>Stats</th></tr></thead>
+      <tbody>`;
+    for (const up of data.upgrades) {
+      let mats = `<span style="color:#555">—</span>`;
+      if (up.materials?.length) {
+        mats = up.materials.map(m => `
+          <div class="mat-item">
+            ${m.icon_url ? `<img src="${m.icon_url}" loading="lazy">` : ""}
+            ${m.display}
+          </div>`).join("");
+      }
+      h += `<tr>
+        <td><strong>${up.from_to}</strong></td>
+        <td class="yang-val">${up.yang}</td>
+        <td>${mats}</td>
+        <td style="color:#a7f3d0;font-size:0.75rem;">${up.stats?.join("<br>") ?? "—"}</td>
+      </tr>`;
+    }
+    h += `</tbody></table></div>`;
+  }
+
+  // Misiones
+  if (ent.type === "quest") {
+    h += `<div style="font-size:0.85rem;line-height:1.7;margin-top:8px;">`;
+    if (data.quest_giver) h += `<p><strong>PNJ:</strong> ${data.quest_giver}</p>`;
+    if (data.level)       h += `<p><strong>Nivel:</strong> ${data.level}</p>`;
+    if (data.items?.length) {
+      h += `<div style="margin-top:6px;"><strong>Items:</strong><div style="margin-top:4px;">`;
+      h += data.items.map(i => `<div class="mat-item">${i.icon_url?`<img src="${i.icon_url}" loading="lazy">`:""}${i.display}</div>`).join("");
+      h += `</div></div>`;
+    }
+    if (data.rewards_text) h += `<p style="margin-top:6px;"><strong>Recompensa:</strong> ${data.rewards_text}</p>`;
+    if (data.solution)     h += `<p style="margin-top:6px;color:#8e8ea0;font-style:italic;">${data.solution}</p>`;
+    h += `</div>`;
+  }
+
+  // Drops
+  if (data.drops_raw) {
+    h += `<div class="drop-box"><strong>Drop / Obtención: </strong>${data.drops_raw}</div>`;
+  }
+
+  // Wiki link
+  h += `<a href="${ent.wiki_url}" target="_blank" rel="noopener noreferrer" class="wiki-link">
+    🔗 Ver en de-wiki.metin2.gameforge.com ↗
+  </a></div>`;
+
+  return h;
+}
+
+// ── Init ───────────────────────────────────────────
+initHistory();
+userInput.focus();

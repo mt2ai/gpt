@@ -3,6 +3,7 @@ import re
 import unicodedata
 import difflib
 import os
+import random
 import urllib.parse
 
 from .wiki_client import get_page_content
@@ -13,6 +14,91 @@ DATA_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "data")
 
 CATALOG_FILE = os.path.join(DATA_DIR, "catalog_index.json")
 SLANG_FILE = os.path.join(DATA_DIR, "slang_dictionary.json")
+
+# ── Respuestas conversacionales ─────────────────────────────────────────────
+
+CONVERSATIONAL_INTENTS = [
+    {
+        "name": "greeting",
+        "patterns": [
+            r"\b(hola|buenas|hey|ey|eyyy|saludos|buenos dias|buenas tardes|buenas noches|hi|hello|que tal|que onda|que hubo|ke tal|ktal)\b"
+        ],
+        "responses": [
+            "¡Hola! 👋 Soy el **Metin2 Oracle**, tu asistente oficial de Metin2.\n\nPuedo ayudarte con:\n- 🗡️ Materiales de mejora de armas y armaduras\n- 📜 Guías de misiones (Biólogo, Pescador, etc.)\n- 🌙 Información de drops de monstruos y jefes\n- 💎 Cualquier cosa del juego que quieras consultar\n\n¿Qué necesitas saber?",
+            "¡Buenas! 🔥 Estoy listo para ayudarte con todo lo de Metin2.\n\nSolo escribe lo que necesitas, puedes escribirlo con faltas o en argot gamer (ej: *\"q pide pa nueve la enve\"*, *\"donde dropea el vms\"*).\n\n¿En qué te ayudo?",
+        ]
+    },
+    {
+        "name": "farewell",
+        "patterns": [
+            r"\b(adios|chao|bye|hasta luego|nos vemos|ciao|hasta pronto|me voy|cuídate|gracias y adios)\b"
+        ],
+        "responses": [
+            "¡Hasta luego! ⚔️ Que el Yang te acompañe en Metin2. Vuelve cuando necesites info.",
+            "¡Chao! 🌙 Suerte en el server. Cualquier duda, aquí estaré.",
+        ]
+    },
+    {
+        "name": "thanks",
+        "patterns": [
+            r"\b(gracias|grax|grac|muchas gracias|ty|thx|thanks|mil gracias|excelente|perfecto|genial|que bueno|de puta madre|chido|chevere)\b"
+        ],
+        "responses": [
+            "¡De nada! 😊 Para eso estoy. ¿Algo más que necesites de Metin2?",
+            "¡Con gusto! ⚔️ Si tienes otra duda, solo pregunta.",
+            "¡Claro que sí! 🎮 ¿Hay algo más en lo que pueda ayudarte?",
+        ]
+    },
+    {
+        "name": "who_are_you",
+        "patterns": [
+            r"\b(quien eres|que eres|como te llamas|que puedes hacer|para que sirves|que sabes|en que me ayudas|cuales son tus capacidades)\b"
+        ],
+        "responses": [
+            "Soy el **Metin2 Oracle** 🔮, un asistente especializado en Metin2.\n\nExtrae información **directamente de la wiki oficial alemana** (la más completa y actualizada) en tiempo real.\n\n**Puedo responder sobre:**\n- 🗡️ Mejoras de armas y armaduras (+0 a +9)\n- 📜 Misiones: Biólogo, Pescador, Guerrero, etc.\n- 👹 Drops de monstruos, jefes y metins\n- 💰 Costos en Yang y materiales necesarios\n- 🎨 Iconos reales del juego\n\nEscribe tu consulta con jerga o faltas, te entiendo igual 😄",
+        ]
+    },
+    {
+        "name": "how_are_you",
+        "patterns": [
+            r"\b(como estas|como andas|todo bien|como te va|bien y tu|que hay|que cuentas)\b"
+        ],
+        "responses": [
+            "¡Todo bien por aquí, listo para consultas! 💪 ¿Qué necesitas saber de Metin2?",
+            "¡Perfecto y tú! 😄 Cuéntame qué necesitas del juego.",
+        ]
+    },
+    {
+        "name": "insult_or_test",
+        "patterns": [
+            r"\b(tonto|estupido|idiota|malo|inutil|no sirves|eres una mierda|test|prueba|hola mundo)\b"
+        ],
+        "responses": [
+            "Soy un oráculo, no me ofendo tan fácil 😄 ¿Necesitas algo de Metin2?",
+            "Jaja, me das duro 😅 Pero bueno, ¿en qué te ayudo con Metin2?",
+        ]
+    },
+    {
+        "name": "joke",
+        "patterns": [
+            r"\b(cuéntame un chiste|dime un chiste|chiste|bromea|algo divertido)\b"
+        ],
+        "responses": [
+            "¿Por qué el guerrero de Metin2 nunca llega tarde? ⚔️\n\nPorque siempre va al **servidor correcto**. 😄\n\n¿Pregunta algo del juego y te respondo en serio!",
+        ]
+    },
+]
+
+def detect_conversational_intent(norm_query):
+    """
+    Detecta si la consulta es conversacional (saludo, despedida, etc.)
+    Retorna (intent_name, response) o (None, None).
+    """
+    for intent in CONVERSATIONAL_INTENTS:
+        for pattern in intent["patterns"]:
+            if re.search(pattern, norm_query):
+                return intent["name"], random.choice(intent["responses"])
+    return None, None
 
 def normalize_string(text):
     if not text:
@@ -68,7 +154,17 @@ class Metin2Engine:
     def resolve_query(self, user_query, session_id="default"):
         norm_query = normalize_string(user_query)
         words = norm_query.split()
-        
+
+        # 0. Detectar intención conversacional (saludos, despedidas, etc.)
+        intent_name, conv_response = detect_conversational_intent(norm_query)
+        if intent_name:
+            return {
+                "success": True,
+                "type": "conversational",
+                "intent": intent_name,
+                "message": conv_response
+            }
+
         # 1. Detectar si especificó un nivel (+0 a +9 o palabras)
         target_plus = None
         match_plus = re.search(r"\+(\d)", norm_query)
@@ -130,7 +226,13 @@ class Metin2Engine:
         if not matched_de_title:
             return {
                 "success": False,
-                "message": f"No pude identificar a qué objeto, monstruo o misión te refieres en: '{user_query}'."
+                "message": (
+                    f"🤔 No encontré nada relacionado con **\"{user_query}\"** en la wiki oficial.\n\n"
+                    "Intenta ser más específico, por ejemplo:\n"
+                    "- *\"materiales espada bambu +9\"*\n"
+                    "- *\"donde dropea el vms\"*\n"
+                    "- *\"mision biologo 30 dientes\"*"
+                )
             }
 
         # Guardar en memoria de sesión
