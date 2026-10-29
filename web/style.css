@@ -68,11 +68,9 @@ body {
 
 /* ── Fila de mensaje ── */
 .msg {
-  display: flex;
-  gap: 8px;
-  padding: 6px 0;
   width: 100%;
   box-sizing: border-box;
+  padding: 8px 0;
   animation: msgIn 0.18s ease-out;
 }
 
@@ -81,40 +79,29 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Mensaje del bot: Avatar arriba, respuesta 100% abajo (sin desplazamiento) */
 .msg.bot {
-  justify-content: flex-start;
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
-}
-
-.msg.user {
-  flex-direction: row-reverse;
-  justify-content: flex-start;
-  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
 }
 
 .msg-avatar {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border-radius: 7px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  margin-top: 2px;
-  flex-shrink: 0;
-}
-
-.msg.user .msg-avatar {
-  background: var(--msg-usr);
-  color: var(--muted);
-  border: 1px solid var(--border);
-}
-
-.msg.bot .msg-avatar {
-  background: var(--accent);
-  color: white;
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
 }
 
 /* Burbuja del mensaje */
@@ -126,18 +113,24 @@ body {
   box-sizing: border-box;
 }
 
-/* El bot ocupa el 100% del ancho disponible en móvil */
+/* El bot ocupa el 100% del ancho disponible sin desplazarse a la derecha */
 .msg.bot .msg-bubble {
-  flex: 1;
-  min-width: 0;
   width: 100%;
-  max-width: calc(100% - 36px);
+  max-width: 100%;
 }
 
-/* El usuario queda alineado a la derecha */
+/* Mensaje del usuario: burbuja limpia a la derecha sin badge */
+.msg.user {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 4px 0;
+}
+
 .msg.user .msg-bubble {
-  max-width: 84%;
+  max-width: 82%;
   background: var(--msg-usr);
+  color: var(--text);
   padding: 9px 13px;
   border-radius: var(--radius);
   border-bottom-right-radius: 4px;

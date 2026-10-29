@@ -78,16 +78,19 @@ function renderMessage(role, htmlContent) {
   const div = document.createElement("div");
   div.className = `msg ${isUser ? "user" : "bot"}`;
 
-  const avatar = document.createElement("div");
-  avatar.className = "msg-avatar";
-  avatar.textContent = isUser ? "Tú" : "M2";
+  // Solo el bot tiene el badge "M2" en la parte superior
+  if (!isUser) {
+    const avatar = document.createElement("div");
+    avatar.className = "msg-avatar";
+    avatar.textContent = "M2";
+    div.appendChild(avatar);
+  }
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
   bubble.innerHTML = htmlContent;
   wrapTables(bubble);
 
-  div.appendChild(avatar);
   div.appendChild(bubble);
   messagesEl.appendChild(div);
   return bubble;
