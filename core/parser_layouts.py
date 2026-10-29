@@ -3,12 +3,16 @@ from .wiki_client import get_image_url
 
 # Diccionario común de traducciones para materiales, stats y términos de la wiki
 VOCAB_ES = {
+    # Materiales de mejora comunes
     "Yetifell+": "Piel de Yeti+",
     "Yetifell": "Piel de Yeti",
     "Bärenfußhaut": "Piel de Pata de Oso",
     "Bärenfußhaut+": "Piel de Pata de Oso+",
+    "Bärengalle": "Hiel de Oso",
+    "Bärengalle+": "Hiel de Oso+",
     "Weißes Haarband+": "Cinta Blanca para el Cabello+",
     "Weißes Haarband": "Cinta Blanca para el Cabello",
+    "Rotes Haarband": "Cinta Roja para el Cabello",
     "Zerbrochenes Porzellan": "Porcelana Rota",
     "Kriegersymbol": "Símbolo del Guerrero",
     "Dämonenandenken": "Recuerdo del Demonio",
@@ -24,9 +28,12 @@ VOCAB_ES = {
     "Orkzahn+": "Diente de Orco+",
     "Ork-Wurrzahn": "Diente de Orco con Raíz",
     "Schlangenhaut": "Piel de Serpiente",
+    "Schlangenschwanz": "Cola de Serpiente",
+    "Schlangenschwanz+": "Cola de Serpiente+",
     "Spinnensack": "Bolsa de Huevos de Araña",
     "Spinnen-Augen": "Ojos de Araña",
     "Spinnenbeine": "Patas de Araña",
+    "Spinnengiftsack": "Bolsa de Veneno de Araña",
     "Skorpionschwanz": "Cola de Escorpión",
     "Skorpionschwanz+": "Cola de Escorpión+",
     "Skorpionnadel": "Aguijón de Escorpión",
@@ -41,7 +48,53 @@ VOCAB_ES = {
     "Eisstück+": "Trozo de Hielo+",
     "Eiskugel": "Bola de Hielo",
     "Eiskugel+": "Bola de Hielo+",
+    "Eiskiller-Horn": "Cuerno de Asesino del Hielo",
     "Flammenmähne": "Melena Llameante",
+    "Wolfsdarm": "Intestino de Lobo",
+    "Wolfskralle": "Garra de Lobo",
+    "Wolfskralle+": "Garra de Lobo+",
+    "Wolfsfell": "Piel de Lobo",
+    "Wolfsfell+": "Piel de Lobo+",
+    "Tigerschwanz": "Cola de Tigre",
+    "Tigerfell": "Piel de Tigre",
+    "Wildschweinzahn": "Colmillo de Jabalí",
+    "Kompensationstafel": "Tabla de Compensación",
+    "Quarzsand": "Arena de Cuarzo",
+    "Dämonenasche": "Ceniza de Demonio",
+    "Magischer Stein": "Piedra Mágica",
+    "Segensschriftrolle": "Pergamino de Bendición",
+    
+    # Flores del Biólogo
+    "Glockenblume": "Campánula",
+    "Pfirsichblüte": "Flor de Melocotón",
+    "Kakiblüte": "Flor de Caqui",
+    "Gango-Wurzel": "Raíz de Gango",
+    "Flieder": "Flor de Lila",
+    "Tue-Pilze": "Hongo Tue",
+    "Tue-Pilz": "Hongo Tue",
+    "Alpenrose": "Rosa Alpina",
+    "Maiglöckchen": "Lirio de los Valles",
+    "Löwenzahn": "Diente de León",
+    
+    # Misiones del Biólogo (ítems clave)
+    "Fluchbuch": "Libro Maldición",
+    "Fluchbuch+": "Libro Maldición+",
+    "Zelkova-Ast": "Rama de Zelkova",
+    "Zelkovaberech": "Rama de Zelkova",
+    "Zelkova Holzast": "Rama de Zelkova",
+    "Tugyis Tafel": "Tablilla de Tugyi",
+    "Tugyistafel": "Tablilla de Tugyi",
+    "Roter Geisterbaum-Ast": "Rama Roja del Árbol Fantasma",
+    "Roter Geisterbaum Ast": "Rama Roja del Árbol Fantasma",
+    "Notiz des Anführers": "Nota del Líder",
+    "Notizen der Anführer": "Notas del Líder",
+    "Juwel des Neides": "Joya de la Envidia",
+    "Juwel der Weisheit": "Joya de la Sabiduría",
+    "Juwel des Hasses": "Joya del Odio",
+    "Jinunggyis Seelenstein": "Piedra Alma Jinunggyi",
+    "Seelenstein": "Piedra Alma",
+    
+    # Clases y Equipo
     "Krieger": "Guerrero",
     "Sura": "Sura",
     "Ninja": "Ninja",
@@ -54,32 +107,120 @@ VOCAB_ES = {
     "Glocke": "Campana",
     "Fächer": "Abanico",
     "Klauen": "Garras",
+    "Klaue": "Garra",
+    "Rüstung": "Armadura",
+    "Helm": "Casco",
+    "Schild": "Escudo",
+    "Ohrringe": "Pendientes",
+    "Armband": "Brazalete",
+    "Halskette": "Collar",
+    "Schuhe": "Zapatos",
+    "Gürtel": "Cinturón",
+    "Talisman": "Talismán",
+    "Level 1 Rüstung +3 (Klassen abhängig)": "Armadura Nivel 1 +3 (según la clase)",
+    "Level 1 Rüstung +3": "Armadura Nivel 1 +3",
+    "Klassen abhängig": "según la clase",
+    "Klassenabhängig": "según la clase",
+    "abhängig": "según corresponda",
+    
+    # Categorías y Drops
     "Truhen": "Cofres",
+    "Truhe": "Cofre",
     "Monster": "Monstruos",
     "Sonstiges": "Otros",
     "Waffenhändler": "Vendedor de Armas",
     "Rüstungshändler": "Vendedor de Armaduras",
+    "Gemischtwarenhändlerin": "Vendedora de la Ciudad",
+    "Fischer": "Pescador",
+    "Schmied": "Herrero",
     "Metins": "Metins",
     "Metinsteine": "Metins",
+    "Boss": "Jefe",
+    "Bosse": "Jefes",
+    "Untote": "No-muertos",
+    "Dämonen": "Demonios",
+    "Tiere": "Animales",
+    "Orks": "Orcos",
+    "Halbmenschen": "Semihumanos",
+    
+    # Estadísticas / Atributos
     "Angriffswert": "Valor de Ataque",
     "Magischer Angriffswert": "Ataque Mágico",
-    "Verteidigung": "Defensa"
+    "Verteidigung": "Defensa",
+    "Magische Verteidigung": "Defensa Mágica",
+    "Angriffsgeschwindigkeit": "Velocidad de Ataque",
+    "Bewegungsgeschwindigkeit": "Velocidad de Movimiento",
+    "Zaubergeschwindigkeit": "Velocidad de Hechizo",
+    "Max. TP": "Max. HP",
+    "Max. MP": "Max. SP",
+    "TP": "HP",
+    "MP": "SP",
+    "EXP": "EXP",
+    "Yang": "Yang",
+    "Trefferchance": "Probabilidad de Impacto",
+    "Kritischer Treffer": "Golpe Crítico",
+    "Durchbohrender Treffer": "Golpe Penetrante",
+    "Abprallen": "Probabilidad de Bloqueo",
+    "Pfeilausweichen": "Evadir Flechas",
+    "Pfeilwiderstand": "Resistencia a Flechas",
+    "Schwertverteidigung": "Defensa Espada",
+    "Zweihänderverteidigung": "Defensa Dos Manos",
+    "Dolchverteidigung": "Defensa Daga",
+    "Glockenverteidigung": "Defensa Campana",
+    "Fächerverteidigung": "Defensa Abanico",
+    "Magiewiderstand": "Resistencia Mágica",
+    "Feuerwiderstand": "Resistencia al Fuego",
+    "Blitzwiderstand": "Resistencia al Relámpago",
+    "Windwiderstand": "Resistencia al Viento",
+    "Dunkelheitswiderstand": "Resistencia a la Oscuridad",
+    "Erdwiderstand": "Resistencia a la Tierra",
+    "Eiswiderstand": "Resistencia al Hielo",
+    "Giftwiderstand": "Resistencia al Veneno",
+    "Vergiftungschance": "Probabilidad de Envenenar",
+    "Ohnmachtschance": "Probabilidad de Desmayo",
+    "Verlangsamungschance": "Probabilidad de Ralentizar",
+    "TP-Regeneration": "Regeneración de HP",
+    "MP-Regeneration": "Regeneración de SP",
+    "TP-Absorbiert": "Absorción de HP",
+    "MP-Absorbiert": "Absorción de SP",
+    
+    # Monstruos Comunes
+    "Wilder Ergebener": "Lacayo Salvaje",
+    "Wilder Bogenschütze": "Arquero Salvaje",
+    "Wilder General": "General Salvaje",
+    "Brutaler Bogenschütze": "Arquero Especialista",
+    "Brutaler Spezialist": "Especialista Brutal",
+    "Stolzer Ork-Zauberer": "Mago Orco Orgulloso",
+    "Schwarzer Orkkrieger": "Guerrero Orco Negro",
+    "Schwarzer Ork": "Orco Negro",
+    "Weißer Eid": "Juramento Blanco",
+    "Weisser Eid": "Juramento Blanco",
+    "Weißer Eid Bogenschützin": "Arquera Juramento Blanco",
+    "Weißer Eid Kommandantin": "Comandante Juramento Blanco"
 }
 
 def translate_term(term):
     if not term:
         return ""
     t_clean = term.strip()
-    return VOCAB_ES.get(t_clean, t_clean)
+    if t_clean in VOCAB_ES:
+        return VOCAB_ES[t_clean]
+    # Reemplazar subcadenas si contiene términos conocidos
+    for de_w, es_w in sorted(VOCAB_ES.items(), key=lambda x: len(x[0]), reverse=True):
+        if de_w in t_clean:
+            t_clean = t_clean.replace(de_w, es_w)
+    return t_clean
 
 def clean_wiki_markup(text):
     if not text:
         return ""
     text = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", text)
     text = re.sub(r"'{2,5}", "", text)
-    # Traducir palabras clave comunes en texto libre
-    for de_w, es_w in VOCAB_ES.items():
-        text = re.sub(rf"\b{re.escape(de_w)}\b", es_w, text)
+    # Reemplazar frases más largas primero para evitar colisiones
+    sorted_vocab = sorted(VOCAB_ES.items(), key=lambda x: len(x[0]), reverse=True)
+    for de_w, es_w in sorted_vocab:
+        if de_w in text:
+            text = text.replace(de_w, es_w)
     return re.sub(r"\s+", " ", text).strip()
 
 def parse_icons_with_urls(raw_text):

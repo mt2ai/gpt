@@ -111,11 +111,21 @@ class Metin2Engine:
         if not text:
             return ""
         text = text.replace("Monster:", "Monstruos:").replace("Truhen:", "Cofres:").replace("Sonstiges:", "Otros:")
+        text = text.replace("Level", "Nivel").replace("Klassen abhängig", "según la clase").replace("abhängig", "según la clase")
+        text = text.replace("Klassen", "Clases").replace("Belohnung", "Recompensa").replace("Lösung", "Solución")
         sorted_pairs = sorted(self.de_to_es.items(), key=lambda x: len(x[0]), reverse=True)
         for de_name, es_name in sorted_pairs:
             if len(de_name) > 3 and de_name in text:
                 text = text.replace(de_name, es_name)
         return text
+
+    def translate_field_with_ai(self, text):
+        if not text:
+            return ""
+        translated = self.translate_raw_names(text)
+        if self.llm.is_available() and len(translated) > 4:
+            return self.llm.translate_to_spanish(translated)
+        return translated
 
     def _record_session_message(self, session_id, role, content):
         if session_id not in self.sessions:
@@ -280,18 +290,31 @@ class Metin2Engine:
                 parsed_data = parse_equipment_layout(wikitext, target_plus=target_plus)
                 category_label = "Equipamiento"
                 if parsed_data.get("drops_raw"):
-                    parsed_data["drops_raw"] = self.translate_raw_names(parsed_data["drops_raw"])
+                    parsed_data["drops_raw"] = self.translate_field_with_ai(parsed_data["drops_raw"])
+                if parsed_data.get("upgrades"):
+                    for up in parsed_data["upgrades"]:
+                        for m in up.get("materials", []):
+                            m["display"] = self.translate_raw_names(m.get("display"))
             elif ent_type == "quest":
                 parsed_data = parse_quest_layout(wikitext)
                 category_label = "Misión"
+                if parsed_data.get("rewards_text"):
+                    parsed_data["rewards_text"] = self.translate_field_with_ai(parsed_data["rewards_text"])
+                if parsed_data.get("solution"):
+                    parsed_data["solution"] = self.translate_field_with_ai(parsed_data["solution"])
+                if parsed_data.get("items"):
+                    for it in parsed_data["items"]:
+                        it["name_es"] = self.translate_raw_names(it.get("name_es") or it.get("name"))
+                        it["display"] = self.translate_raw_names(it.get("display"))
             elif ent_type in ["monster", "boss", "metin"]:
                 parsed_data = parse_monster_layout(wikitext)
                 category_label = "Monstruo / Jefe"
                 if parsed_data.get("drops_text"):
-                    parsed_data["drops_text"] = self.translate_raw_names(parsed_data["drops_text"])
+                    parsed_data["drops_text"] = self.translate_field_with_ai(parsed_data["drops_text"])
             else:
                 category_label = "Objeto"
-                parsed_data = {"description": wikitext[:600]}
+                desc_trans = self.translate_field_with_ai(wikitext[:600])
+                parsed_data = {"description": desc_trans}
 
         # Si el LLM está activo, generar explicación natural enriquecida con los datos oficiales
         ai_message = None

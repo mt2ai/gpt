@@ -225,13 +225,13 @@ function buildWikiCard(res) {
   if (data.main_image) h += `<img src="${data.main_image}" class="item-img" alt="${ent.title_es}" loading="lazy">`;
   h += `<div class="item-title">
     <h2>${ent.title_es}</h2>
-    <div class="item-subtitle">${ent.title_de} · ${ent.category_label}${data.level ? ` · Nv ${data.level}` : ""}</div>
+    <div class="item-subtitle">${ent.category_label}${data.level ? ` · Nivel ${data.level}` : ""}</div>
   </div></div>`;
 
   // Tabla mejoras
   if (data.upgrades && data.upgrades.length > 0) {
     h += `<div class="table-scroll"><table class="upgrade-table">
-      <thead><tr><th>Nivel</th><th>Coste</th><th>Materiales</th><th>Stats</th></tr></thead>
+      <thead><tr><th>Nivel</th><th>Coste</th><th>Materiales</th><th>Atributos</th></tr></thead>
       <tbody>`;
     for (const up of data.upgrades) {
       let mats = `<span style="color:#555">—</span>`;
@@ -239,7 +239,7 @@ function buildWikiCard(res) {
         mats = up.materials.map(m => `
           <div class="mat-item">
             ${m.icon_url ? `<img src="${m.icon_url}" loading="lazy">` : ""}
-            ${m.display}
+            ${m.display || m.name_es}
           </div>`).join("");
       }
       h += `<tr>
@@ -255,26 +255,26 @@ function buildWikiCard(res) {
   // Misiones
   if (ent.type === "quest") {
     h += `<div style="font-size:0.85rem;line-height:1.7;margin-top:8px;">`;
-    if (data.quest_giver) h += `<p><strong>PNJ:</strong> ${data.quest_giver}</p>`;
-    if (data.level)       h += `<p><strong>Nivel:</strong> ${data.level}</p>`;
+    if (data.quest_giver) h += `<p><strong>Personaje (PNJ):</strong> ${data.quest_giver}</p>`;
+    if (data.level)       h += `<p><strong>Nivel requerido:</strong> ${data.level}</p>`;
     if (data.items?.length) {
-      h += `<div style="margin-top:6px;"><strong>Items:</strong><div style="margin-top:4px;">`;
-      h += data.items.map(i => `<div class="mat-item">${i.icon_url?`<img src="${i.icon_url}" loading="lazy">`:""}${i.display}</div>`).join("");
+      h += `<div style="margin-top:6px;"><strong>Objetos requeridos:</strong><div style="margin-top:4px;">`;
+      h += data.items.map(i => `<div class="mat-item">${i.icon_url?`<img src="${i.icon_url}" loading="lazy">`:""}${i.display || i.name_es}</div>`).join("");
       h += `</div></div>`;
     }
     if (data.rewards_text) h += `<p style="margin-top:6px;"><strong>Recompensa:</strong> ${data.rewards_text}</p>`;
-    if (data.solution)     h += `<p style="margin-top:6px;color:#8e8ea0;font-style:italic;">${data.solution}</p>`;
+    if (data.solution)     h += `<p style="margin-top:6px;color:#8e8ea0;"><strong>Cómo completarla:</strong> ${data.solution}</p>`;
     h += `</div>`;
   }
 
   // Drops
   if (data.drops_raw) {
-    h += `<div class="drop-box"><strong>Drop / Obtención: </strong>${data.drops_raw}</div>`;
+    h += `<div class="drop-box"><strong>Dónde se consigue (Drops): </strong>${data.drops_raw}</div>`;
   }
 
   // Wiki link
   h += `<a href="${ent.wiki_url}" target="_blank" rel="noopener noreferrer" class="wiki-link">
-    🔗 Ver en de-wiki.metin2.gameforge.com ↗
+    🔗 Ver artículo oficial en Metin2 Wiki ↗
   </a></div>`;
 
   return h;

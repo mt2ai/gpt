@@ -63,7 +63,23 @@ Directrices de personalidad y formato:
    - Armas del 30 (Luna Llena, Hierro Rojo, etc.): Tienen media y habilidad nativas, no piden materiales de mejora hasta +9 (solo yang).
    - Armas del 75 (Envenenada, Resentimiento, etc.): Tienen media y habilidad nativas, caen en el cofre del Segador de la Muerte.
 
-5. Si te proporcionan datos extraídos de la wiki oficial (como tablas de mejora o drops), incorpóralos con absoluta precisión en tu respuesta para respaldar tus datos.
+5. REGLA DE ORO DE IDIOMA (MANDATORIA):
+   - Debes responder SIEMPRE, SIN EXCEPCIÓN, 100% EN ESPAÑOL.
+   - La información de la wiki original de Metin2 proviene de la versión alemana y contiene términos en alemán (por ejemplo: "Glockenblume", "Orkzahn", "Wilder Ergebener", "Rüstung", "Klassen abhängig", "Belohnung", "Lösung").
+   - NUNCA dejes palabras, nombres o textos en alemán en tus respuestas ni en tus explicaciones. Traduce absolutamente TODO al español oficial de Metin2:
+     * Glockenblume -> Campánula
+     * Pfirsichblüte -> Flor de Melocotón
+     * Orkzahn -> Diente de Orco
+     * Wilder Ergebener -> Lacayo Salvaje
+     * Wilder Bogenschütze -> Arquero Salvaje
+     * Rüstung -> Armadura
+     * Klassen abhängig -> dependiendo de la clase/raza
+     * Belohnung -> Recompensa
+     * Lösung -> Solución
+     * Verteidigung -> Defensa
+     * Angriffswert -> Valor de Ataque
+
+6. Si te proporcionan datos extraídos de la wiki oficial (como tablas de mejora o drops), incorpóralos con absoluta precisión en tu respuesta para respaldar tus datos, pero traduciendo todo al español.
 
 ¡Ofrece siempre la mejor respuesta posible al jugador!
 """
@@ -75,6 +91,46 @@ class GroqLLM:
 
     def is_available(self):
         return bool(self.api_key and self.api_key.startswith("gsk_"))
+
+    def translate_to_spanish(self, text):
+        """
+        Traduce textos crudos del alemán al español de Metin2 usando Groq
+        """
+        if not text or not self.is_available():
+            return text
+        
+        prompt = (
+            f"Traduce este texto oficial de la wiki alemana de Metin2 al español, manteniendo números, yang, exp y formato conciso:\n"
+            f"\"{text}\"\n"
+            f"Solo devuelve el texto traducido al español, sin explicaciones ni comillas."
+        )
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "Metin2Oracle/1.0"
+        }
+
+        try:
+            res = requests.post(
+                GROQ_API_URL,
+                headers=headers,
+                json={
+                    "model": "openai/gpt-oss-20b",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.1,
+                    "max_tokens": 250
+                },
+                timeout=4
+            )
+            if res.status_code == 200:
+                translated = res.json()["choices"][0]["message"]["content"].strip().strip('"')
+                if translated:
+                    return translated
+        except Exception as e:
+            print(f"[GroqLLM] Error en traducción rápida: {e}")
+
+        return text
 
     def generate_response(self, user_query, history=None, wiki_context=None):
         if not self.is_available():
@@ -97,7 +153,7 @@ class GroqLLM:
                 f"[DATOS OFICIALES DE LA WIKI DE METIN2 RECUPERADOS EN TIEMPO REAL]:\n"
                 f"{wiki_context}\n\n"
                 f"[CONSULTA DEL JUGADOR]:\n{user_query}\n\n"
-                f"Responde la consulta del jugador integrando con claridad los datos oficiales de la wiki si corresponden."
+                f"IMPORTANTE: Recuerda responder 100% en español. Traduce cualquier término o nombre en alemán al español de Metin2."
             )
 
         messages.append({"role": "user", "content": user_message_content})
@@ -131,3 +187,4 @@ class GroqLLM:
                 print(f"[GroqLLM] Error conectando con Groq ({model}): {e}")
 
         return None
+
