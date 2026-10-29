@@ -431,3 +431,16 @@ table.upgrade-table td:last-child {
     min-height: 38px;
   }
 }
+
+/* ── Modo Híbrido: Comentario / Consejos IA antes de la tarjeta ── */
+.ai-comment {
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+.ai-comment p {
+  margin-bottom: 8px;
+}
+.ai-comment p:last-child {
+  margin-bottom: 0;
+}
+

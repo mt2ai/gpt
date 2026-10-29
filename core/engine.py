@@ -76,6 +76,31 @@ def normalize_string(text):
     text = re.sub(r"[^\w\s\+]", " ", text)
     return " ".join(text.split())
 
+METIN2_TERMS = {
+    # Juego / General
+    "metin", "metin2", "yang", "won", "dss", "fks", "pvm", "pvp", "dopes", "dopear", "dopada",
+    "ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "server", "servidor", "gameforge",
+    # Mecánicas y Sistemas
+    "alquimia", "estola", "estolas", "cinturon", "cinturones", "talisman", "talismanes",
+    "mascota", "mascotas", "pet", "pets", "incubadora", "huevo", "huevos",
+    "caballo", "montura", "monturas", "establo", "medalla", "medallas",
+    "biologo", "chaegirab", "seon-pyeong", "seon", "pyeong", "uriel", "baek-go", "baek",
+    "herrero", "bendi", "bendicion", "pergamino", "pergaminos", "manual",
+    "habilidad", "habilidades", "master", "gran master", "perfect master", "piedra alma", "piedras alma",
+    "doctrina", "corporal", "mental", "magia negra", "armamento", "asesino", "arquero",
+    "luz", "dragon", "licano", "guerrero", "sura", "ninja", "chaman", "shaman",
+    # Zonas y Mazmorras
+    "aldea", "mapa1", "mapa2", "valle", "desierto", "sohan", "fuego", "doyyumhwan",
+    "gruta", "grotto", "atlantida", "sd1", "sd2", "sd3", "arana", "aranas",
+    "torre", "demonios", "catacumbas", "purgatorio", "nemere", "razador", "meley",
+    "jotun", "thrym", "hidra", "beran", "setau", "azrael", "segador",
+    # Misiones y Drops
+    "levear", "leveo", "farmear", "farmeo", "drop", "dropea", "dropean", "cae", "tira", "suelta",
+    "dientes", "maldicion", "recuerdos", "zelkova", "tugyi", "tablillas", "gemas", "joyas",
+    "orco", "orcos", "lacayo", "arquero salvaje", "vms", "enve", "rib", "fms", "ebanos",
+    "espada", "armadura", "casco", "escudo", "zapatos", "pendientes", "brazalete", "collar"
+}
+
 class Metin2Engine:
     def __init__(self):
         with open(CATALOG_FILE, "r", encoding="utf-8") as f:
@@ -106,6 +131,37 @@ class Metin2Engine:
         # Memoria de conversación por sesión
         # session_id -> { "messages": [...], "last_entity": "Giftschwert" }
         self.sessions = {}
+
+    def is_metin2_query(self, norm_query, words, session):
+        # 1. Contiene alguna palabra clave del juego
+        if any(w in METIN2_TERMS for w in words):
+            return True
+
+        # 2. Contiene jerga de Metin2
+        for slang_term in self.slang.keys():
+            if re.search(rf"\b{re.escape(slang_term)}\b", norm_query):
+                return True
+
+        # 3. Coincidencia exacta en índice de búsqueda
+        if norm_query in self.search_index:
+            return True
+
+        # 4. Objetos y términos comunes de Metin2 en español
+        common_terms = [
+            "luna llena", "hierro rojo", "espada envenenada", "acero negro",
+            "diente de orco", "libro maldicion", "recuerdo demonio", "segador de la muerte",
+            "beran setau", "dragon azul", "espada de ninfa", "espada de batalla",
+            "partisana", "hoja electromagnetica", "zapatos fenix", "pendientes de ebano",
+            "elixir del investigador", "espiral del tiempo", "cor draconis"
+        ]
+        if any(t in norm_query for t in common_terms):
+            return True
+
+        # 5. Memoria de sesión previa para seguimiento de mejoras/drops
+        if session.get("last_entity") and (re.search(r"\+(\d)", norm_query) or any(w in words for w in ["donde", "cae", "pide", "yang", "mats", "subir"])):
+            return True
+
+        return False
 
     def translate_raw_names(self, text):
         if not text:
@@ -144,35 +200,12 @@ class Metin2Engine:
             self.sessions[session_id] = {"messages": [], "last_entity": None}
         session = self.sessions[session_id]
 
-        # 1. Detectar si la consulta es una pregunta o frase en lenguaje natural
-        is_natural_question = bool(
-            "?" in user_query or len(words) >= 4 or re.search(
-                r"\b(sabes|existe|puede|puedo|pueden|podemos|tener|tengo|tienen|se puede|como|cómo|que|qué|cual|cuál|cuales|cuáles|por que|por qué|porque|donde|dónde|cuando|cuándo|quien|quién|cuanto|cuánto|cuantos|cuántos|cuantas|cuántas|hay|sirve|funciona|pasa|recomiend|consejo|consejos|guia|guía|fallo|fallar|probabilidad|mascota|mascotas|pet|pets|combinar|diferencia|compara|alquimia|caballo|levear|leveo)\b",
-                norm_query
-            )
-        )
-
-        # 2. Detectar si se pregunta por una mejora específica (+0 a +9) o materiales
-        target_plus = None
-        match_plus = re.search(r"\+(\d)", norm_query)
-        if match_plus:
-            target_plus = int(match_plus.group(1))
-        else:
-            word_num_map = {
-                "cero": 0, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, 
-                "cinco": 5, "seis": 6, "siete": 7, "ocho": 8, "nuebe": 9, "nueve": 9
-            }
-            for w, n in word_num_map.items():
-                if w in words:
-                    target_plus = n
-                    break
-
-        # 3. Saludos o cortesía breve
+        # 1. Saludos o cortesía breve (1 a 3 palabras)
         intent_name, conv_response = detect_conversational_intent(norm_query)
         if intent_name and len(words) <= 3:
             if self.llm.is_available():
                 history = session.get("messages", [])
-                llm_reply = self.llm.generate_response(user_query, history=history)
+                llm_reply = self.llm.generate_response(user_query, history=history, is_metin2=True)
                 if llm_reply:
                     self._record_session_message(session_id, "user", user_query)
                     self._record_session_message(session_id, "assistant", llm_reply)
@@ -188,78 +221,117 @@ class Metin2Engine:
                 "message": conv_response
             }
 
-        # 4. Identificar entidad oficial si el usuario la nombra específicamente
+        # 2. Detección de tema: ¿Es sobre Metin2 o es una pregunta general externa?
+        is_metin2 = self.is_metin2_query(norm_query, words, session)
+
+        # ── CAMINO A: CONSULTA GENERAL (NO es de Metin2) ──────────────────
+        # Responde 100% con Groq como asistente versátil de IA (estilo ChatGPT).
+        # CERO llamadas a la wiki oficial de Gameforge, CERO búsquedas en catálogo alemán.
+        if not is_metin2:
+            if self.llm.is_available():
+                history = session.get("messages", [])
+                llm_reply = self.llm.generate_response(user_query, history=history, is_metin2=False)
+                if llm_reply:
+                    self._record_session_message(session_id, "user", user_query)
+                    self._record_session_message(session_id, "assistant", llm_reply)
+                    return {
+                        "success": True,
+                        "type": "conversational",
+                        "message": llm_reply
+                    }
+            return {
+                "success": True,
+                "type": "conversational",
+                "message": "Hola, soy el Metin2 Oracle. Puedes preguntarme sobre cualquier tema general o consultar objetos, misiones y guías de Metin2."
+            }
+
+        # ── CAMINO B: CONSULTA DE METIN2 ──────────────────────────────────
+        # Detectar si se pregunta por una mejora específica (+0 a +9) o materiales
+        target_plus = None
+        match_plus = re.search(r"\+(\d)", norm_query)
+        if match_plus:
+            target_plus = int(match_plus.group(1))
+        else:
+            word_num_map = {
+                "cero": 0, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, 
+                "cinco": 5, "seis": 6, "siete": 7, "ocho": 8, "nuebe": 9, "nueve": 9
+            }
+            for w, n in word_num_map.items():
+                if w in words:
+                    target_plus = n
+                    break
+
+        # Buscar si hay una entidad específica en catálogo o jerga
         matched_de_title = None
-        
-        # Búsqueda directa por frase exacta o jerga
+
+        # Búsqueda directa por frase exacta
         if norm_query in self.search_index:
             matched_de_title = self.search_index[norm_query]
         else:
             # Buscar coincidencia exacta de jerga conocida (ordenada de mayor a menor longitud)
             sorted_slang = sorted(self.slang.items(), key=lambda x: len(x[0]), reverse=True)
             for slang_term, de_title in sorted_slang:
-                # La jerga debe estar como palabra completa o frase contenida
                 if re.search(rf"\b{re.escape(slang_term)}\b", norm_query):
                     matched_de_title = de_title
                     break
 
-        # Búsqueda difusa: SOLO si es una consulta corta (1 a 3 palabras) y NO es una pregunta abierta
-        if not matched_de_title and not is_natural_question and len(words) <= 3:
-            stopwords = {
-                "q", "que", "pide", "pa", "para", "la", "el", "los", "las", "subir", "a", "de", "en", 
-                "como", "donde", "mision", "misiones", "dropea", "cae", "suelta", "quien", "consigo", "da", "consigue",
-                "necesito", "una", "un", "los", "las", "y", "o", "cuanto", "cuantos", "cuantas", "yang", "materiales", "dame"
-            }
-            meaningful_words = [w for w in words if w not in stopwords and not w.isdigit()]
-            query_core = " ".join(meaningful_words)
-            if query_core:
-                keys = list(self.search_index.keys())
-                matches = difflib.get_close_matches(query_core, keys, n=1, cutoff=0.7)
-                if matches:
-                    matched_de_title = self.search_index[matches[0]]
-
-        # Si es una pregunta natural y NO pide explícitamente materiales de mejora ni ficha de objeto:
-        # Dejar que el LLM responda con su conocimiento conversacional sin forzar fichas irrelevantes
-        is_asking_for_card = bool(target_plus is not None or any(w in words for w in ["pide", "materiales", "mats", "stats", "atributos", "tabla"]))
-        if is_natural_question and self.llm.is_available() and not is_asking_for_card:
-            history = session.get("messages", [])
-            llm_reply = self.llm.generate_response(user_query, history=history)
-            if llm_reply:
-                self._record_session_message(session_id, "user", user_query)
-                self._record_session_message(session_id, "assistant", llm_reply)
-                return {
-                    "success": True,
-                    "type": "conversational",
-                    "message": llm_reply
-                }
+        # Búsqueda en nombres oficiales en español si la consulta contiene el nombre
+        if not matched_de_title:
+            sorted_search = sorted([(k, v) for k, v in self.search_index.items() if len(k) > 4], key=lambda x: len(x[0]), reverse=True)
+            for norm_name, de_title in sorted_search:
+                if re.search(rf"\b{re.escape(norm_name)}\b", norm_query):
+                    matched_de_title = de_title
+                    break
 
         # Memoria de conversación: usar última entidad si la consulta es un pronombre o contexto ("y a +9?", "donde cae?")
         if not matched_de_title and session.get("last_entity"):
-            if any(w in words for w in ["donde", "cae", "dropea", "subir", "pide", "mats", "yang", "coste", "nivel"]) or target_plus is not None:
+            if target_plus is not None or any(w in words for w in ["donde", "cae", "dropea", "subir", "pide", "mats", "yang", "coste", "nivel"]):
                 matched_de_title = session["last_entity"]
 
-        # Si aún no se encontró entidad pero hay LLM disponible: responder de forma conversacional con el LLM
-        if not matched_de_title and self.llm.is_available():
-            history = session.get("messages", [])
-            llm_reply = self.llm.generate_response(user_query, history=history)
-            if llm_reply:
-                self._record_session_message(session_id, "user", user_query)
-                self._record_session_message(session_id, "assistant", llm_reply)
-                return {
-                    "success": True,
-                    "type": "conversational",
-                    "message": llm_reply
-                }
+        # Determinar si el usuario pide ficha técnica con datos de la wiki
+        # (materiales, costes en Yang, tabla de mejoras, drops o consulta directa de un ítem)
+        card_keywords = ["pide", "materiales", "mats", "coste", "yang", "stats", "atributos", "tabla", "ficha", "dropea", "donde cae", "quien lo tira", "donde se consigue", "recompensa", "requisitos"]
+        is_technical_card_request = bool(
+            target_plus is not None or
+            any(w in words for w in card_keywords) or
+            (matched_de_title and len(words) <= 3)
+        )
 
-        # Si no hay entidad ni LLM
+        # Si NO pide ficha técnica de un objeto específico (ej: guías, consejos de farmeo, builds, mecánicas):
+        # Responder de forma conversacional con Groq usando el conocimiento veterano sin conectar a la wiki
+        if not is_technical_card_request or not matched_de_title:
+            if self.llm.is_available():
+                history = session.get("messages", [])
+                llm_reply = self.llm.generate_response(user_query, history=history, is_metin2=True)
+                if llm_reply:
+                    self._record_session_message(session_id, "user", user_query)
+                    self._record_session_message(session_id, "assistant", llm_reply)
+                    return {
+                        "success": True,
+                        "type": "conversational",
+                        "message": llm_reply
+                    }
+
+        # Si aún no tenemos entidad pero hay LLM, responder con el LLM
         if not matched_de_title:
+            if self.llm.is_available():
+                history = session.get("messages", [])
+                llm_reply = self.llm.generate_response(user_query, history=history, is_metin2=True)
+                if llm_reply:
+                    self._record_session_message(session_id, "user", user_query)
+                    self._record_session_message(session_id, "assistant", llm_reply)
+                    return {
+                        "success": True,
+                        "type": "conversational",
+                        "message": llm_reply
+                    }
             return {
                 "success": False,
                 "message": (
                     f"🤔 No encontré información específica sobre **\"{user_query}\"**.\n\n"
                     "Puedes preguntar cosas como:\n"
-                    "- *\"cuántas misiones del biólogo hay\"*\n"
                     "- *\"qué pide para nueve la enve\"*\n"
+                    "- *\"consejos para farmear yang a nivel 30\"*\n"
                     "- *\"dónde cae el vms\"*\n"
                     "- *\"cómo sacar caballo armado\"*"
                 )
@@ -314,26 +386,34 @@ class Metin2Engine:
                 desc_trans = self.translate_field_with_ai(wikitext[:600])
                 parsed_data = {"description": desc_trans}
 
-        # Si el LLM está activo, generar explicación natural enriquecida con los datos oficiales
+        # ── MODO HÍBRIDO: IA CONSEJOS + DATOS DE LA WIKI ──────────────────
         ai_message = None
         if self.llm.is_available():
-            wiki_summary = f"Entidad: {title_es} ({matched_de_title}) - Categoría: {category_label}\n"
+            wiki_summary = f"Objeto/Entidad: {title_es} ({matched_de_title}) - Categoría: {category_label}\n"
             if target_plus is not None:
                 wiki_summary += f"Nivel consultado: +{target_plus}\n"
             if parsed_data.get("upgrades"):
-                wiki_summary += f"Tabla de mejoras disponible para {len(parsed_data['upgrades'])} niveles.\n"
+                wiki_summary += "Datos de mejoras oficiales extraídos:\n"
+                for up in parsed_data["upgrades"]:
+                    lvl = up.get("level", "")
+                    yang = up.get("yang", "")
+                    mats = ", ".join([f"{m.get('count', 1)}x {m.get('display', '')}" for m in up.get("materials", [])])
+                    attrs = ", ".join([f"{a.get('name', '')}: {a.get('value', '')}" for a in up.get("attributes", []) if a.get("value")])
+                    wiki_summary += f"- Nivel {lvl}: Coste {yang} Yang | Materiales: {mats or 'Ninguno'} | Atributos: {attrs}\n"
             if parsed_data.get("drops_raw"):
-                wiki_summary += f"Drops / Obtención: {parsed_data['drops_raw']}\n"
+                wiki_summary += f"Drops / Lugares de obtención: {parsed_data['drops_raw']}\n"
+            if parsed_data.get("drops_text"):
+                wiki_summary += f"Drops: {parsed_data['drops_text']}\n"
             if parsed_data.get("rewards_text"):
-                wiki_summary += f"Recompensas: {parsed_data['rewards_text']}\n"
+                wiki_summary += f"Recompensas oficiales: {parsed_data['rewards_text']}\n"
 
             history = session.get("messages", [])
-            ai_message = self.llm.generate_response(user_query, history=history, wiki_context=wiki_summary)
+            ai_message = self.llm.generate_response(user_query, history=history, wiki_context=wiki_summary, is_metin2=True)
             if ai_message:
                 self._record_session_message(session_id, "user", user_query)
                 self._record_session_message(session_id, "assistant", ai_message)
 
-        # Si tenemos tarjeta parseada
+        # Si tenemos tarjeta parseada, devolver respuesta híbrida
         if parsed_data:
             return {
                 "success": True,
@@ -351,7 +431,7 @@ class Metin2Engine:
                 "data": parsed_data
             }
 
-        # Si falló la wiki pero tenemos IA
+        # Si falló la wiki pero la IA generó respuesta conversacional con consejos
         if ai_message:
             return {
                 "success": True,
