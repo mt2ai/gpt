@@ -6,7 +6,7 @@ import os
 import random
 import urllib.parse
 
-from .wiki_client import get_page_content
+from .wiki_client import get_page_content, fetch_es_wiki_grounding
 from .parser_layouts import parse_equipment_layout, parse_quest_layout, parse_monster_layout
 from .llm import GroqLLM
 
@@ -101,6 +101,54 @@ METIN2_TERMS = {
     "espada", "armadura", "casco", "escudo", "zapatos", "pendientes", "brazalete", "collar"
 }
 
+ES_SEARCH_ALIASES = {
+    "sd1": "Caverna de arañas 1",
+    "sd2": "Caverna de arañas 2",
+    "sd3": "Caverna de arañas 3",
+    "vms": "Espada Luna Llena",
+    "luna": "Espada Luna Llena",
+    "enve": "Espada Envenenada",
+    "rib": "Hierro Rojo",
+    "hierro": "Hierro Rojo",
+    "ebanos": "Pendientes de Ébano",
+    "grotto": "Gruta del Exilio",
+    "gruta": "Gruta del Exilio",
+    "torre": "Torre Demoníaca",
+    "biolo": "Biólogo Chaegirab",
+    "biologo": "Biólogo Chaegirab",
+    "chaegirab": "Biólogo Chaegirab",
+    "aura": "Aura de espada",
+    "cuerpo fuerte": "Cuerpo Fuerte",
+    "beran": "Beran-Setaou",
+    "setau": "Beran-Setaou",
+    "segador": "Segador de la Muerte",
+    "azrael": "Azrael",
+    "razador": "Razador",
+    "nemere": "Nemere",
+    "meley": "Reina Meley",
+    "jotun": "Jotun Thrym",
+    "hidra": "Hidra",
+    "caballo": "Misiones de Caballo",
+    "alquimia": "Alquimia",
+    "dientes": "Dientes de Orco",
+    "maldicion": "Libro Maldición",
+    "recuerdos": "Recuerdo del Demonio",
+    "zelkova": "Ramas de Zelkova",
+    "tugyi": "Tablillas de Tugyi",
+    "rey llama": "Rey Llama",
+    "jefe orco": "Jefe Orco",
+    "nueve colas": "Nueve Colas",
+    "tortuga": "Tortuga Gigante",
+    "fantasma tigre": "Fantasma Tigre Amarillo"
+}
+
+QUERY_STOPWORDS = {
+    "donde", "sale", "el", "la", "los", "las", "un", "una", "de", "del", "en", "como", "que", "es",
+    "para", "mi", "pj", "puede", "tener", "cuanto", "cuantos", "cuantas", "dame", "consejos",
+    "guia", "matar", "sacar", "hacer", "subir", "conseguir", "dropea", "cae", "tira", "suelta",
+    "pide", "mats", "materiales", "hay", "sirve", "funciona", "se", "por", "favor", "nivel", "lvl"
+}
+
 class Metin2Engine:
     def __init__(self):
         with open(CATALOG_FILE, "r", encoding="utf-8") as f:
@@ -131,6 +179,19 @@ class Metin2Engine:
         # Memoria de conversación por sesión
         # session_id -> { "messages": [...], "last_entity": "Giftschwert" }
         self.sessions = {}
+
+    def extract_es_search_term(self, query, matched_es_title=None):
+        if matched_es_title:
+            return matched_es_title
+        norm = query.lower()
+        words = norm.split()
+        for slang, target in ES_SEARCH_ALIASES.items():
+            if re.search(rf"\b{re.escape(slang)}\b", norm):
+                return target
+        meaningful = [w for w in words if w not in QUERY_STOPWORDS and not w.isdigit()]
+        if meaningful:
+            return " ".join(meaningful)
+        return query
 
     def is_metin2_query(self, norm_query, words, session):
         # 1. Contiene alguna palabra clave del juego
@@ -297,12 +358,29 @@ class Metin2Engine:
             (matched_de_title and len(words) <= 3)
         )
 
-        # Si NO pide ficha técnica de un objeto específico (ej: guías, consejos de farmeo, builds, mecánicas):
-        # Responder de forma conversacional con Groq usando el conocimiento veterano sin conectar a la wiki
+        # ── OBTENER HECHOS OFICIALES EN ESPAÑOL DESDE ES-WIKI ─────────────
+        # Para evitar cualquier alucinación en guías, jefes, mapas, drops y mecánicas
+        title_es_hint = None
+        if matched_de_title:
+            ent_info = self.catalog.get(matched_de_title, {})
+            title_es_hint = ent_info.get("title_es") or self.de_to_es.get(matched_de_title)
+        es_search_term = self.extract_es_search_term(user_query, matched_es_title=title_es_hint)
+        es_grounding = fetch_es_wiki_grounding(es_search_term) if es_search_term else None
+
+        # Si NO pide ficha técnica de un objeto específico (ej: jefes, mecánicas, guías, lore, zonas):
+        # Responder de forma conversacional con Groq pero FUNDAMENTADO en los datos reales de es-wiki
         if not is_technical_card_request or not matched_de_title:
             if self.llm.is_available():
                 history = session.get("messages", [])
-                llm_reply = self.llm.generate_response(user_query, history=history, is_metin2=True)
+                grounding_context = None
+                if es_grounding:
+                    grounding_context = (
+                        f"[DATOS OFICIALES DE ES-WIKI DE METIN2 ({es_grounding['title']})]:\n"
+                        f"{es_grounding['facts']}\n"
+                        f"Fuente: {es_grounding['url']}\n\n"
+                        f"IMPORTANTE: Basa tu respuesta en estos datos oficiales para no alucinar ubicaciones, drops ni requisitos."
+                    )
+                llm_reply = self.llm.generate_response(user_query, history=history, wiki_context=grounding_context, is_metin2=True)
                 if llm_reply:
                     self._record_session_message(session_id, "user", user_query)
                     self._record_session_message(session_id, "assistant", llm_reply)
@@ -316,7 +394,10 @@ class Metin2Engine:
         if not matched_de_title:
             if self.llm.is_available():
                 history = session.get("messages", [])
-                llm_reply = self.llm.generate_response(user_query, history=history, is_metin2=True)
+                grounding_context = None
+                if es_grounding:
+                    grounding_context = f"[DATOS OFICIALES DE ES-WIKI ({es_grounding['title']})]:\n{es_grounding['facts']}"
+                llm_reply = self.llm.generate_response(user_query, history=history, wiki_context=grounding_context, is_metin2=True)
                 if llm_reply:
                     self._record_session_message(session_id, "user", user_query)
                     self._record_session_message(session_id, "assistant", llm_reply)
@@ -389,7 +470,10 @@ class Metin2Engine:
         # ── MODO HÍBRIDO: IA CONSEJOS + DATOS DE LA WIKI ──────────────────
         ai_message = None
         if self.llm.is_available():
-            wiki_summary = f"Objeto/Entidad: {title_es} ({matched_de_title}) - Categoría: {category_label}\n"
+            wiki_summary = ""
+            if es_grounding:
+                wiki_summary += f"[DATOS OFICIALES DE ES-WIKI ({es_grounding['title']})]:\n{es_grounding['facts']}\n\n"
+            wiki_summary += f"[DATOS OFICIALES DE MEJORAS / EQUIPAMIENTO]:\nObjeto/Entidad: {title_es} ({matched_de_title}) - Categoría: {category_label}\n"
             if target_plus is not None:
                 wiki_summary += f"Nivel consultado: +{target_plus}\n"
             if parsed_data.get("upgrades"):
