@@ -2,6 +2,9 @@ const chatContainer = document.getElementById("chatContainer");
 const userInput = document.getElementById("userInput");
 const sendBtn = document.getElementById("sendBtn");
 
+// Configuración de API Backend (si está en GitHub Pages, puede apuntar a un servidor remoto)
+const BACKEND_URL = localStorage.getItem("m2_backend_url") || "";
+
 // ID de sesión único por dispositivo para la memoria de conversación
 let sessionId = localStorage.getItem("m2_session_id");
 if (!sessionId) {
@@ -34,7 +37,8 @@ async function handleSend(e) {
   appendMessage("assistant", `<span class="loading-dots">Consultando wiki oficial...</span>`, botMessageId);
 
   try {
-    const response = await fetch(`/api/ask?q=${encodeURIComponent(text)}&session_id=${encodeURIComponent(sessionId)}`);
+    const apiUrl = `${BACKEND_URL}/api/ask?q=${encodeURIComponent(text)}&session_id=${encodeURIComponent(sessionId)}`;
+    const response = await fetch(apiUrl);
     const result = await response.json();
     
     const botMsgElement = document.getElementById(botMessageId);
