@@ -36,11 +36,14 @@ def get_js():
     return FileResponse(os.path.join(WEB_DIR, "app.js"), media_type="application/javascript")
 
 @app.get("/api/ask")
-def ask(q: str = Query(..., description="Consulta en lenguaje natural")):
+def ask(
+    q: str = Query(..., description="Consulta en lenguaje natural"),
+    session_id: str = Query("default", description="ID de sesión para memoria conversacional")
+):
     if not q or not q.strip():
         return JSONResponse({"success": False, "message": "Por favor escribe una consulta."})
         
-    result = engine.resolve_query(q)
+    result = engine.resolve_query(q, session_id=session_id)
     return JSONResponse(result)
 
 if __name__ == "__main__":

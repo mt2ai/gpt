@@ -2,6 +2,13 @@ const chatContainer = document.getElementById("chatContainer");
 const userInput = document.getElementById("userInput");
 const sendBtn = document.getElementById("sendBtn");
 
+// ID de sesión único por dispositivo para la memoria de conversación
+let sessionId = localStorage.getItem("m2_session_id");
+if (!sessionId) {
+  sessionId = "sess-" + Math.random().toString(36).substring(2, 9);
+  localStorage.setItem("m2_session_id", sessionId);
+}
+
 function scrollToBottom() {
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
@@ -27,7 +34,7 @@ async function handleSend(e) {
   appendMessage("assistant", `<span class="loading-dots">Consultando wiki oficial...</span>`, botMessageId);
 
   try {
-    const response = await fetch(`/api/ask?q=${encodeURIComponent(text)}`);
+    const response = await fetch(`/api/ask?q=${encodeURIComponent(text)}&session_id=${encodeURIComponent(sessionId)}`);
     const result = await response.json();
     
     const botMsgElement = document.getElementById(botMessageId);
