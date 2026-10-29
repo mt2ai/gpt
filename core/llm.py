@@ -65,6 +65,10 @@ Tienes dos grandes facetas de atención según la naturaleza de la consulta:
 4. REGLA ESTRICTA DE IDIOMA:
 - Responde SIEMPRE 100% EN ESPAÑOL.
 - Traduce cualquier término o nombre en alemán que aparezca en los datos oficiales al español de Metin2.
+
+5. INTEGRIDAD Y CIERRE COMPLETO:
+- Concluye siempre tus explicaciones y respuestas con un cierre completo y claro.
+- Nunca dejes oraciones, listas o explicaciones a medias.
 """
 
 class GroqLLM:
@@ -102,9 +106,9 @@ class GroqLLM:
                     "model": "openai/gpt-oss-20b",
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.1,
-                    "max_tokens": 250
+                    "max_tokens": 1000
                 },
-                timeout=4
+                timeout=8
             )
             if res.status_code == 200:
                 translated = res.json()["choices"][0]["message"]["content"].strip().strip('"')
@@ -144,7 +148,7 @@ class GroqLLM:
                 f"1. Explica y resume con claridad en español los requisitos, materiales o drops solicitados.\n"
                 f"2. Da CONSEJOS Y RECOMENDACIONES DE VETERANO (ej: método seguro de mejora a partir de +7 con bendi/manual, piedras +4 ideales, dopes recomendados, dónde farmear los materiales).\n"
                 f"3. La tabla interactiva oficial con iconos y datos se renderizará automáticamente debajo de tu mensaje.\n"
-                f"4. Recuerda responder 100% en español sin palabras en alemán."
+                f"4. Recuerda responder 100% en español sin palabras en alemán y concluye siempre tu respuesta de forma completa."
             )
 
         messages.append({"role": "user", "content": user_message_content})
@@ -163,11 +167,11 @@ class GroqLLM:
                 "model": model,
                 "messages": messages,
                 "temperature": 0.6,
-                "max_tokens": 1200
+                "max_tokens": 3500
             }
 
             try:
-                res = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=12)
+                res = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=25)
                 if res.status_code == 200:
                     data = res.json()
                     answer = data["choices"][0]["message"]["content"]
