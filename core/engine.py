@@ -144,13 +144,15 @@ class Metin2Engine:
             self.sessions[session_id] = {"messages": [], "last_entity": None}
         session = self.sessions[session_id]
 
-        # Detectar si es una pregunta conceptual, de conteo, lista, guía o explicación
-        is_overview_or_question = bool(re.search(
-            r"\b(cuant[ao]s?|list[ao]|tod[ao]s|cuales|que son|como funciona|donde levear|leveo|guia|consejos?|que dopes|que bonus|alquimia|caballo|estatus|stats|razas?|build|compara|diferencia|por que|porque|explic|sirve|hace)\b",
-            norm_query
-        ))
+        # 1. Detectar si la consulta es una pregunta o frase en lenguaje natural
+        is_natural_question = bool(
+            "?" in user_query or len(words) >= 4 or re.search(
+                r"\b(sabes|existe|puede|puedo|pueden|podemos|tener|tengo|tienen|se puede|como|cómo|que|qué|cual|cuál|cuales|cuáles|por que|por qué|porque|donde|dónde|cuando|cuándo|quien|quién|cuanto|cuánto|cuantos|cuántos|cuantas|cuántas|hay|sirve|funciona|pasa|recomiend|consejo|consejos|guia|guía|fallo|fallar|probabilidad|mascota|mascotas|pet|pets|combinar|diferencia|compara|alquimia|caballo|levear|leveo)\b",
+                norm_query
+            )
+        )
 
-        # Detectar nivel (+0 a +9)
+        # 2. Detectar si se pregunta por una mejora específica (+0 a +9) o materiales
         target_plus = None
         match_plus = re.search(r"\+(\d)", norm_query)
         if match_plus:
@@ -165,20 +167,7 @@ class Metin2Engine:
                     target_plus = n
                     break
 
-        # ── CASO A: Pregunta abierta / de lista / conteo / guía con LLM activo ──
-        if is_overview_or_question and self.llm.is_available():
-            history = session.get("messages", [])
-            llm_reply = self.llm.generate_response(user_query, history=history)
-            if llm_reply:
-                self._record_session_message(session_id, "user", user_query)
-                self._record_session_message(session_id, "assistant", llm_reply)
-                return {
-                    "success": True,
-                    "type": "conversational",
-                    "message": llm_reply
-                }
-
-        # ── CASO B: Saludos y cortesía si no hay LLM o si es un saludo simple ──
+        # 3. Saludos o cortesía breve
         intent_name, conv_response = detect_conversational_intent(norm_query)
         if intent_name and len(words) <= 3:
             if self.llm.is_available():
@@ -199,21 +188,23 @@ class Metin2Engine:
                 "message": conv_response
             }
 
-        # ── CASO C: Identificar entidad oficial en el catálogo ──
+        # 4. Identificar entidad oficial si el usuario la nombra específicamente
         matched_de_title = None
         
-        # Búsqueda directa por frase o jerga
+        # Búsqueda directa por frase exacta o jerga
         if norm_query in self.search_index:
             matched_de_title = self.search_index[norm_query]
         else:
+            # Buscar coincidencia exacta de jerga conocida (ordenada de mayor a menor longitud)
             sorted_slang = sorted(self.slang.items(), key=lambda x: len(x[0]), reverse=True)
             for slang_term, de_title in sorted_slang:
-                if slang_term in norm_query:
+                # La jerga debe estar como palabra completa o frase contenida
+                if re.search(rf"\b{re.escape(slang_term)}\b", norm_query):
                     matched_de_title = de_title
                     break
 
-        # Búsqueda difusa eliminando stopwords
-        if not matched_de_title:
+        # Búsqueda difusa: SOLO si es una consulta corta (1 a 3 palabras) y NO es una pregunta abierta
+        if not matched_de_title and not is_natural_question and len(words) <= 3:
             stopwords = {
                 "q", "que", "pide", "pa", "para", "la", "el", "los", "las", "subir", "a", "de", "en", 
                 "como", "donde", "mision", "misiones", "dropea", "cae", "suelta", "quien", "consigo", "da", "consigue",
@@ -221,19 +212,26 @@ class Metin2Engine:
             }
             meaningful_words = [w for w in words if w not in stopwords and not w.isdigit()]
             query_core = " ".join(meaningful_words)
-            
-            if query_core and not is_overview_or_question:
+            if query_core:
                 keys = list(self.search_index.keys())
-                matches = difflib.get_close_matches(query_core, keys, n=1, cutoff=0.55)
+                matches = difflib.get_close_matches(query_core, keys, n=1, cutoff=0.7)
                 if matches:
                     matched_de_title = self.search_index[matches[0]]
-                else:
-                    for mw in meaningful_words:
-                        if len(mw) >= 4:
-                            sub_m = difflib.get_close_matches(mw, keys, n=1, cutoff=0.7)
-                            if sub_m:
-                                matched_de_title = self.search_index[sub_m[0]]
-                                break
+
+        # Si es una pregunta natural y NO pide explícitamente materiales de mejora ni ficha de objeto:
+        # Dejar que el LLM responda con su conocimiento conversacional sin forzar fichas irrelevantes
+        is_asking_for_card = bool(target_plus is not None or any(w in words for w in ["pide", "materiales", "mats", "stats", "atributos", "tabla"]))
+        if is_natural_question and self.llm.is_available() and not is_asking_for_card:
+            history = session.get("messages", [])
+            llm_reply = self.llm.generate_response(user_query, history=history)
+            if llm_reply:
+                self._record_session_message(session_id, "user", user_query)
+                self._record_session_message(session_id, "assistant", llm_reply)
+                return {
+                    "success": True,
+                    "type": "conversational",
+                    "message": llm_reply
+                }
 
         # Memoria de conversación: usar última entidad si la consulta es un pronombre o contexto ("y a +9?", "donde cae?")
         if not matched_de_title and session.get("last_entity"):

@@ -18,8 +18,8 @@ if os.path.exists(env_path):
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODELS_PRIORITY = [
-    "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
     "qwen/qwen3.8-27b",
 ]
 
@@ -42,9 +42,14 @@ Directrices de personalidad y formato:
    - Biolo = Misiones del Biólogo Chaegirab
    - Caballo Armado / Militar = Monturas y sus habilidades
 
-4. Conocimiento clave:
+4. Conocimiento experto y verídico de Metin2 (MECÁNICAS OFICIALES):
    - Misiones del Biólogo Chaegirab y Seon-Pyeong:
-     * El Biólogo tiene 10 misiones de investigación principales indispensables por sus bonus permanentes:
+     * ¿Hay probabilidad de fallo al entregar?: ¡SÍ! Chaegirab y Seon-Pyeong PUEDEN RECHAZAR los objetos. La probabilidad de fallo es de aproximadamente 30% a 50% según el objeto. Si falla, el NPC dice que el objeto está podrido o no sirve, el objeto se destruye y NO cuenta en el progreso.
+     * Tiempo de espera: En servidores oficiales solo se puede entregar 1 objeto cada 24 horas (cooldown).
+     * Elixir del Investigador (Forscherelixier): Ítem especial que garantiza un 100% de éxito en la siguiente entrega (no falla).
+     * Espiral del Tiempo (Spirale der Zeit): Reduce o elimina el tiempo de espera entre entregas.
+     * Piedra Alma: Una vez entregados todos los objetos solicitados con éxito, te pedirá conseguir la Piedra Alma de esa misión (ej: Piedra Alma Jinunggyi para los dientes) que dropean los monstruos de esa zona para culminar la misión y recibir la recompensa permanente.
+     * Las 10 misiones principales indispensables:
        1. Nv 30: 10 Dientes de Orco (+10 Velocidad de movimiento permanente)
        2. Nv 40: 15 Libros Maldición (+5% Velocidad de ataque permanente)
        3. Nv 50: 15 Recuerdos del Demonio (+60 Defensa permanente)
@@ -55,13 +60,35 @@ Directrices de personalidad y formato:
        8. Nv 90: 50 Notas del Líder (+10% Daño contra monstruos / semihumanos permanente)
        9. Nv 92 (Seon-Pyeong): 10 Joyas de la Envidia (Elegir: +1000 HP, +120 Ataque o +60 Defensa)
        10. Nv 94 (Seon-Pyeong): 20 Joyas de la Sabiduría (Elegir: +1100 HP, +140 Ataque o +70 Defensa)
-     * También existen las misiones tempranas de flores (Nv 4 Melocotón, Nv 7 Campánula, Nv 10 Caqui, Nv 15 Raíz de Gango, Nv 20 Lila, Nv 25 Hongo Tue) para aprender a crear pociones con Baek-Go, y las misiones de investigación de Yohara a nivel Campeón.
-   - Caballo:
-     * Nivel 1 a 10: Principiante (Imagen de caballo, Heno)
-     * Nivel 11 a 20: Armado (Medallas de Caballo, Zanahorias, misión de matar 100 arqueros en desierto en 30 min. ¡Permite pegar desde el caballo!)
-     * Nivel 21+: Militar (Ginseng rojo, misión en Torre de Demonios, otorga habilidades de combate)
-   - Armas del 30 (Luna Llena, Hierro Rojo, etc.): Tienen media y habilidad nativas, no piden materiales de mejora hasta +9 (solo yang).
-   - Armas del 75 (Envenenada, Resentimiento, etc.): Tienen media y habilidad nativas, caen en el cofre del Segador de la Muerte.
+     * Misiones de flores (Nv 4 a 25): Sirven para elaborar pociones medicinales con Baek-Go (Melocotón, Campánula, Caqui, Gango, Lila, Hongo Tue).
+
+   - Sistema de Mascotas (Pets):
+     * ¿Puede un personaje nivel 18 tener mascota?: ¡SÍ! Se pueden tener mascotas desde nivel 1.
+     * Mascotas de Evento / Tienda (Porki, Khan, Fénix, Cachorros): Se usan desde nivel 1, duran 15 a 30 días reales y dan bonus pasivos automáticos muy poderosos (+15% daño, +1500 HP).
+     * Mascotas de Crecimiento (Huevos de Mono, Araña, Razador, Nemere, Meley, etc.): Se incuban desde nivel 1 con una Incubadora. Tienen duración en días y tipo de crecimiento (Tipo 1 a 6/8). Suben de nivel matando monstruos junto al jugador y comiendo armas/armaduras (EXP de objeto). Evolucionan a Joven (1-40), Salvaje (40-80), Valiente (80-81) y Heroica (81+), donde aprenden hasta 3 habilidades de mascota (Cazador de Monstruos, Berserker, Obstrucción, etc.).
+
+   - Caballo y Monturas:
+     * Nivel 1 a 10: Principiante (nivel 25+, 1 Medalla de Caballo en Chico del Establo, matar 20 arqueros salvajes en 30 min, se alimenta con Heno).
+     * Nivel 11 a 20: Armado / De Guerra (nivel 35+, 10 Medallas de Caballo, matar 100 arqueros del desierto en 30 min. ¡Permite golpear a pie de montura! Se alimenta con Zanahorias).
+     * Nivel 21+: Militar (nivel 50+, Medallas de Caballo, matar 300 arqueros demonio en Torre. Otorga habilidades de combate ecuestre. Se alimenta con Ginseng Rojo).
+
+   - Mejoras y Herrero:
+     * Herrero normal: puede fallar y DESTRUIR el objeto para siempre.
+     * Pergamino de Bendición (Bendi): si la mejora falla, el objeto NO se destruye, solo baja 1 nivel de mejora.
+     * Manual del Herrero / Pergamino del Dragón: mayor tasa de éxito y nunca destruyen el ítem.
+     * Mineral de Cobre Mágico / Pergamino de Guerra: mejora segura de +0 a +4.
+
+   - Armas del 30 y 75 (Media y Habilidad):
+     * Tienen de forma nativa Daño Medio (DSS) y Daño de Habilidad (FKS).
+     * Media (DSS): para golpes normales y pegar desde montura/caballo (la reina del PvM).
+     * Habilidad (FKS): para daño de skills y magia (duelos PvP).
+     * Armas del 30 (Luna Llena, Hierro Rojo, etc.): no piden materiales hasta +9 (solo yang).
+     * Armas del 75 (Envenenada, Resentimiento, etc.): caen del cofre del Segador de la Muerte.
+
+   - Alquimia del Dragón:
+     * Misión de Cor Draconis diaria a nivel 30+.
+     * Claridades: Mate -> Limpio -> Brillante -> Excelente -> Mítico.
+     * Piedras: Rubí (daño/defensa), Diamante (magia), Jade (HP), Zafiro (PvP), Granate (SP), Ónice (bloqueo/críticos).
 
 5. REGLA DE ORO DE IDIOMA (MANDATORIA):
    - Debes responder SIEMPRE, SIN EXCEPCIÓN, 100% EN ESPAÑOL.
