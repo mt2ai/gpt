@@ -60,6 +60,18 @@ function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+// ── Envolver tablas para scroll responsivo ─────────
+function wrapTables(container) {
+  container.querySelectorAll("table").forEach(tbl => {
+    if (!tbl.parentElement || !tbl.parentElement.classList.contains("table-scroll")) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "table-scroll";
+      tbl.parentNode.insertBefore(wrapper, tbl);
+      wrapper.appendChild(tbl);
+    }
+  });
+}
+
 // ── Renderizar un mensaje en pantalla ──────────────
 function renderMessage(role, htmlContent) {
   const isUser = role === "user";
@@ -73,6 +85,7 @@ function renderMessage(role, htmlContent) {
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
   bubble.innerHTML = htmlContent;
+  wrapTables(bubble);
 
   div.appendChild(avatar);
   div.appendChild(bubble);
